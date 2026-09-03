@@ -1,0 +1,448 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { saveFAQData, loadFAQData } from './csvLoader.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STORE_FILE = path.resolve(__dirname, '../../db_store.json');
+
+export enum DataStatus {
+  DRAFT = 'DRAFT',
+  REVIEW = 'REVIEW',
+  PUBLISHED = 'PUBLISHED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum UserRole {
+  DATA_ENTRY = 'DATA_ENTRY',
+  REVIEWER = 'REVIEWER',
+}
+
+export enum PeriodType {
+  YEARLY = 'YEARLY',
+  QUARTERLY = 'QUARTERLY',
+  MONTHLY = 'MONTHLY',
+}
+
+export enum AuditAction {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  DELETE = 'DELETE',
+  STATUS_CHANGE = 'STATUS_CHANGE',
+  SUBMIT_REVIEW = 'SUBMIT_REVIEW',
+  APPROVE = 'APPROVE',
+  REJECT = 'REJECT',
+  PUBLISH = 'PUBLISH',
+  ARCHIVE = 'ARCHIVE',
+}
+
+export interface Dataset {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  description: string;
+  definition: string;
+  geographic_scope: string;
+  unit: string;
+  source: string;
+  period_type: PeriodType;
+  status: DataStatus;
+  created_by: string;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
+  record_count?: number;
+}
+
+export interface DataRecord {
+  id: string;
+  dataset_id: string;
+  indicator: string;
+  region: string;
+  period: string;
+  value: number | null;
+  unit: string;
+  notes: string;
+  source: string;
+  status: DataStatus;
+  created_by: string;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
+  is_deleted: boolean;
+}
+
+export interface AuditChange {
+  field: string;
+  old_value: string | number | null;
+  new_value: string | number | null;
+}
+
+export interface AuditLog {
+  id: string;
+  entity_type: 'dataset' | 'record';
+  entity_id: string;
+  entity_name: string;
+  action: AuditAction;
+  changes: AuditChange[];
+  user_id: string;
+  user_name: string;
+  reason?: string;
+  created_at: string;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  created_at: string;
+}
+
+export interface ReviewRequest {
+  id: string;
+  dataset_id: string;
+  dataset_name: string;
+  record_ids: string[];
+  description: string;
+  submitted_by: string;
+  submitted_by_name: string;
+  submitted_at: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewed_by?: string;
+  reviewed_by_name?: string;
+  reviewed_at?: string;
+  reject_reason?: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+}
+
+export interface BackendStore {
+  datasets: Dataset[];
+  records: DataRecord[];
+  users: User[];
+  reviews: ReviewRequest[];
+  auditLogs: AuditLog[];
+  categories: Category[];
+}
+
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: 'cat-1', name: 'Jumlah Penduduk', code: 'POP', description: 'Data kependudukan dan demografi Kabupaten Bangka' },
+  { id: 'cat-2', name: 'Data Kemiskinan', code: 'POV', description: 'Data kemiskinan dan kesejahteraan sosial' },
+  { id: 'cat-3', name: 'Pertumbuhan Ekonomi', code: 'GROWTH', description: 'Data pertumbuhan ekonomi dan PDRB regional' },
+  { id: 'cat-4', name: 'Indeks Pembangunan Manusia (IPM)', code: 'HDI', description: 'Indeks pembangunan manusia dan kualitas hidup' },
+  { id: 'cat-5', name: 'Tenaga Kerja', code: 'LABOR', description: 'Data ketenagakerjaan, angkatan kerja, dan pengangguran' },
+  { id: 'cat-6', name: 'Produk Domestik Regional Bruto (PDRB)', code: 'GRDP', description: 'Data produk domestik regional bruto atas dasar harga berlaku & konstan' },
+  { id: 'cat-7', name: 'Indeks Pembangunan Gender (IPG)', code: 'GDI', description: 'Indeks pembangunan dan kesetaraan gender' },
+  { id: 'cat-8', name: 'Dimensi Pendidikan (RLS & HLS)', code: 'EDU', description: 'Data rata-rata lama sekolah & harapan lama sekolah' },
+];
+
+const DEFAULT_USERS: User[] = [
+  { id: 'user-1', name: 'Ahmad Fauzi', email: 'ahmad.fauzi@bps.go.id', role: UserRole.DATA_ENTRY, created_at: '2025-01-01T00:00:00Z' },
+  { id: 'user-2', name: 'Siti Nurhaliza', email: 'siti.nurhaliza@bps.go.id', role: UserRole.REVIEWER, created_at: '2025-01-01T00:00:00Z' },
+  { id: 'user-3', name: 'Budi Santoso', email: 'budi.santoso@bps.go.id', role: UserRole.DATA_ENTRY, created_at: '2025-03-15T00:00:00Z' },
+];
+
+const DEFAULT_DATASETS: Dataset[] = [
+  {
+    id: 'ds-1',
+    code: 'POP-001',
+    name: 'Jumlah Penduduk Kabupaten Bangka',
+    category: 'Jumlah Penduduk',
+    description: 'Data jumlah penduduk Kabupaten Bangka hasil proyeksi SP2020 resmi BPS.',
+    definition: 'Banyaknya orang yang berdomisili di wilayah Kabupaten Bangka.',
+    geographic_scope: 'Kabupaten Bangka',
+    unit: 'Jiwa',
+    source: 'BPS Kabupaten Bangka',
+    period_type: PeriodType.YEARLY,
+    status: DataStatus.PUBLISHED,
+    created_by: 'user-1',
+    updated_by: 'user-1',
+    created_at: '2025-01-01T08:00:00Z',
+    updated_at: '2025-10-01T08:00:00Z',
+    record_count: 5,
+  },
+  {
+    id: 'ds-2',
+    code: 'POV-001',
+    name: 'Data Kemiskinan Kabupaten Bangka',
+    category: 'Data Kemiskinan',
+    description: 'Persentase dan jumlah penduduk miskin di Kabupaten Bangka.',
+    definition: 'Penduduk yang memiliki rata-rata pengeluaran per kapita per bulan di bawah Garis Kemiskinan.',
+    geographic_scope: 'Kabupaten Bangka',
+    unit: 'Persen (%)',
+    source: 'BPS Kabupaten Bangka',
+    period_type: PeriodType.YEARLY,
+    status: DataStatus.PUBLISHED,
+    created_by: 'user-1',
+    updated_by: 'user-2',
+    created_at: '2025-01-15T08:00:00Z',
+    updated_at: '2025-11-20T08:00:00Z',
+    record_count: 4,
+  },
+  {
+    id: 'ds-3',
+    code: 'GROWTH-001',
+    name: 'Laju Pertumbuhan Ekonomi Kabupaten Bangka',
+    category: 'Pertumbuhan Ekonomi',
+    description: 'Laju pertumbuhan PDRB atas dasar harga konstan tahun 2021-2025.',
+    definition: 'Perubahan persentase nilai riil PDRB antar tahun.',
+    geographic_scope: 'Kabupaten Bangka',
+    unit: 'Persen (%)',
+    source: 'BPS Kabupaten Bangka',
+    period_type: PeriodType.YEARLY,
+    status: DataStatus.PUBLISHED,
+    created_by: 'user-1',
+    updated_by: 'user-1',
+    created_at: '2025-02-01T08:00:00Z',
+    updated_at: '2025-12-05T08:00:00Z',
+    record_count: 5,
+  },
+  {
+    id: 'ds-4',
+    code: 'HDI-001',
+    name: 'Indeks Pembangunan Manusia (IPM) Kabupaten Bangka',
+    category: 'Indeks Pembangunan Manusia (IPM)',
+    description: 'Capaian IPM Kabupaten Bangka beserta komponen UHH, RLS, dan HLS.',
+    definition: 'Ukuran capaian pembangunan kualitas hidup manusia berbasis kesehatan, pendidikan, dan ekonomi.',
+    geographic_scope: 'Kabupaten Bangka',
+    unit: 'Indeks',
+    source: 'BPS Kabupaten Bangka',
+    period_type: PeriodType.YEARLY,
+    status: DataStatus.PUBLISHED,
+    created_by: 'user-1',
+    updated_by: 'user-2',
+    created_at: '2025-02-15T08:00:00Z',
+    updated_at: '2025-12-10T08:00:00Z',
+    record_count: 5,
+  },
+  {
+    id: 'ds-5',
+    code: 'LABOR-001',
+    name: 'Tingkat Pengangguran Terbuka (TPT) Kab. Bangka',
+    category: 'Tenaga Kerja',
+    description: 'Persentase penganggur terhadap jumlah angkatan kerja.',
+    definition: 'Proporsi angkatan kerja yang belum memiliki pekerjaan atau sedang mencari pekerjaan.',
+    geographic_scope: 'Kabupaten Bangka',
+    unit: 'Persen (%)',
+    source: 'BPS Kabupaten Bangka',
+    period_type: PeriodType.YEARLY,
+    status: DataStatus.PUBLISHED,
+    created_by: 'user-3',
+    updated_by: 'user-3',
+    created_at: '2025-03-01T08:00:00Z',
+    updated_at: '2025-12-12T08:00:00Z',
+    record_count: 5,
+  },
+  {
+    id: 'ds-6',
+    code: 'GRDP-001',
+    name: 'Produk Domestik Regional Bruto (PDRB) ADHB & ADHK',
+    category: 'Produk Domestik Regional Bruto (PDRB)',
+    description: 'Nilai total barang dan jasa akhir yang dihasilkan di Kabupaten Bangka.',
+    definition: 'Ukuran aktivitas ekonomi agregat wilayah dalam rupiah.',
+    geographic_scope: 'Kabupaten Bangka',
+    unit: 'Miliar Rupiah',
+    source: 'BPS Kabupaten Bangka',
+    period_type: PeriodType.YEARLY,
+    status: DataStatus.PUBLISHED,
+    created_by: 'user-1',
+    updated_by: 'user-2',
+    created_at: '2025-03-10T08:00:00Z',
+    updated_at: '2025-12-15T08:00:00Z',
+    record_count: 4,
+  },
+  {
+    id: 'ds-7',
+    code: 'GDI-001',
+    name: 'Indeks Pembangunan Gender (IPG) Kabupaten Bangka',
+    category: 'Indeks Pembangunan Gender (IPG)',
+    description: 'Rasio pencapaian IPM antara perempuan dan laki-laki.',
+    definition: 'Perbandingan IPM wanita terhadap pria di Kabupaten Bangka.',
+    geographic_scope: 'Kabupaten Bangka',
+    unit: 'Indeks',
+    source: 'BPS Kabupaten Bangka',
+    period_type: PeriodType.YEARLY,
+    status: DataStatus.PUBLISHED,
+    created_by: 'user-1',
+    updated_by: 'user-1',
+    created_at: '2025-03-15T08:00:00Z',
+    updated_at: '2025-12-18T08:00:00Z',
+    record_count: 6,
+  },
+  {
+    id: 'ds-8',
+    code: 'EDU-001',
+    name: 'Dimensi Pendidikan: Rata-Rata Lama Sekolah (RLS)',
+    category: 'Dimensi Pendidikan (RLS & HLS)',
+    description: 'Rata-rata tahun pendidikan yang telah ditempuh penduduk usia 25 tahun ke atas.',
+    definition: 'Rata-rata jumlah tahun yang dihabiskan untuk pendidikan formal.',
+    geographic_scope: 'Kabupaten Bangka',
+    unit: 'Tahun',
+    source: 'BPS Kabupaten Bangka',
+    period_type: PeriodType.YEARLY,
+    status: DataStatus.PUBLISHED,
+    created_by: 'user-1',
+    updated_by: 'user-2',
+    created_at: '2025-04-01T08:00:00Z',
+    updated_at: '2025-12-20T08:00:00Z',
+    record_count: 5,
+  }
+];
+
+const DEFAULT_RECORDS: DataRecord[] = [
+  // Penduduk
+  { id: 'rec-1', dataset_id: 'ds-1', indicator: 'Jumlah Penduduk', region: 'Kabupaten Bangka', period: '2021', value: 326265, unit: 'Jiwa', notes: 'Hasil SP2020', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-2', dataset_id: 'ds-1', indicator: 'Jumlah Penduduk', region: 'Kabupaten Bangka', period: '2022', value: 331165, unit: 'Jiwa', notes: 'Proyeksi SP2020', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-3', dataset_id: 'ds-1', indicator: 'Jumlah Penduduk', region: 'Kabupaten Bangka', period: '2023', value: 336069, unit: 'Jiwa', notes: 'Proyeksi SP2020', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-4', dataset_id: 'ds-1', indicator: 'Jumlah Penduduk', region: 'Kabupaten Bangka', period: '2024', value: 341069, unit: 'Jiwa', notes: 'Proyeksi SP2020', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-5', dataset_id: 'ds-1', indicator: 'Jumlah Penduduk', region: 'Kabupaten Bangka', period: '2025', value: 346069, unit: 'Jiwa', notes: 'Proyeksi SP2020 Resmi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-01-01T00:00:00Z', updated_at: '2025-01-01T00:00:00Z', is_deleted: false },
+
+  // Kemiskinan
+  { id: 'rec-6', dataset_id: 'ds-2', indicator: 'Persentase Kemiskinan', region: 'Kabupaten Bangka', period: '2022', value: 4.26, unit: '%', notes: 'P1: 0.67 | P2: 0.15', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-01-15T00:00:00Z', updated_at: '2025-01-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-7', dataset_id: 'ds-2', indicator: 'Persentase Kemiskinan', region: 'Kabupaten Bangka', period: '2023', value: 4.32, unit: '%', notes: 'P1: 0.35 | P2: 0.04', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-01-15T00:00:00Z', updated_at: '2025-01-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-8', dataset_id: 'ds-2', indicator: 'Persentase Kemiskinan', region: 'Kabupaten Bangka', period: '2024', value: 4.24, unit: '%', notes: 'P1: 0.62 | P2: 0.14', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-01-15T00:00:00Z', updated_at: '2025-01-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-9', dataset_id: 'ds-2', indicator: 'Persentase Kemiskinan', region: 'Kabupaten Bangka', period: '2025', value: 4.71, unit: '%', notes: 'P1: 0.51 | P2: 0.09 | Miskin: 16.58 rb', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-2', created_at: '2025-01-15T00:00:00Z', updated_at: '2025-01-15T00:00:00Z', is_deleted: false },
+
+  // Pertumbuhan Ekonomi
+  { id: 'rec-10', dataset_id: 'ds-3', indicator: 'Pertumbuhan Ekonomi (Tahunan)', region: 'Kabupaten Bangka', period: '2021', value: 7.46, unit: '%', notes: 'Realisasi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-02-01T00:00:00Z', updated_at: '2025-02-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-11', dataset_id: 'ds-3', indicator: 'Pertumbuhan Ekonomi (Tahunan)', region: 'Kabupaten Bangka', period: '2022', value: 4.86, unit: '%', notes: 'Realisasi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-02-01T00:00:00Z', updated_at: '2025-02-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-12', dataset_id: 'ds-3', indicator: 'Pertumbuhan Ekonomi (Tahunan)', region: 'Kabupaten Bangka', period: '2023', value: 4.42, unit: '%', notes: 'Angka Sementara', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-02-01T00:00:00Z', updated_at: '2025-02-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-13', dataset_id: 'ds-3', indicator: 'Pertumbuhan Ekonomi (Tahunan)', region: 'Kabupaten Bangka', period: '2024', value: -0.44, unit: '%', notes: 'Angka Sangat Sementara', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-02-01T00:00:00Z', updated_at: '2025-02-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-14', dataset_id: 'ds-3', indicator: 'Pertumbuhan Ekonomi (Tahunan)', region: 'Kabupaten Bangka', period: '2025', value: 5.19, unit: '%', notes: 'y-on-y Triwulan III', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-02-01T00:00:00Z', updated_at: '2025-02-01T00:00:00Z', is_deleted: false },
+
+  // IPM
+  { id: 'rec-15', dataset_id: 'ds-4', indicator: 'IPM', region: 'Kabupaten Bangka', period: '2021', value: 73.13, unit: 'Indeks', notes: 'Kategori Tinggi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-02-15T00:00:00Z', updated_at: '2025-02-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-16', dataset_id: 'ds-4', indicator: 'IPM', region: 'Kabupaten Bangka', period: '2022', value: 73.62, unit: 'Indeks', notes: 'Kategori Tinggi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-02-15T00:00:00Z', updated_at: '2025-02-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-17', dataset_id: 'ds-4', indicator: 'IPM', region: 'Kabupaten Bangka', period: '2023', value: 74.34, unit: 'Indeks', notes: 'UHH: 73.03 | RLS: 8.32', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-02-15T00:00:00Z', updated_at: '2025-02-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-18', dataset_id: 'ds-4', indicator: 'IPM', region: 'Kabupaten Bangka', period: '2024', value: 74.66, unit: 'Indeks', notes: 'UHH: 73.24 | RLS: 8.45', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-02-15T00:00:00Z', updated_at: '2025-02-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-19', dataset_id: 'ds-4', indicator: 'IPM', region: 'Kabupaten Bangka', period: '2025', value: 75.38, unit: 'Indeks', notes: 'Naik 0.96% | UHH: 73.56', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-2', created_at: '2025-02-15T00:00:00Z', updated_at: '2025-02-15T00:00:00Z', is_deleted: false },
+
+  // Tenaga Kerja
+  { id: 'rec-20', dataset_id: 'ds-5', indicator: 'Tingkat Pengangguran Terbuka', region: 'Kabupaten Bangka', period: '2021', value: 5.97, unit: '%', notes: 'TPAK 62.68%', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-3', updated_by: 'user-3', created_at: '2025-03-01T00:00:00Z', updated_at: '2025-03-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-21', dataset_id: 'ds-5', indicator: 'Tingkat Pengangguran Terbuka', region: 'Kabupaten Bangka', period: '2022', value: 5.39, unit: '%', notes: 'TPAK 68.81%', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-3', updated_by: 'user-3', created_at: '2025-03-01T00:00:00Z', updated_at: '2025-03-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-22', dataset_id: 'ds-5', indicator: 'Tingkat Pengangguran Terbuka', region: 'Kabupaten Bangka', period: '2023', value: 5.03, unit: '%', notes: 'TPAK 67.46%', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-3', updated_by: 'user-3', created_at: '2025-03-01T00:00:00Z', updated_at: '2025-03-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-23', dataset_id: 'ds-5', indicator: 'Tingkat Pengangguran Terbuka', region: 'Kabupaten Bangka', period: '2024', value: 4.91, unit: '%', notes: 'TPAK 67.92%', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-3', updated_by: 'user-3', created_at: '2025-03-01T00:00:00Z', updated_at: '2025-03-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-24', dataset_id: 'ds-5', indicator: 'Tingkat Pengangguran Terbuka', region: 'Kabupaten Bangka', period: '2025', value: 4.75, unit: '%', notes: 'TPAK 67.93% (Tren Menurun)', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-3', updated_by: 'user-3', created_at: '2025-03-01T00:00:00Z', updated_at: '2025-03-01T00:00:00Z', is_deleted: false },
+
+  // PDRB
+  { id: 'rec-25', dataset_id: 'ds-6', indicator: 'PDRB ADHB', region: 'Kabupaten Bangka', period: '2021', value: 16166.01, unit: 'Miliar Rp', notes: 'ADHK: 10.733,86 M', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-03-10T00:00:00Z', updated_at: '2025-03-10T00:00:00Z', is_deleted: false },
+  { id: 'rec-26', dataset_id: 'ds-6', indicator: 'PDRB ADHB', region: 'Kabupaten Bangka', period: '2022', value: 17956.28, unit: 'Miliar Rp', notes: 'ADHK: 11.255,79 M', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-03-10T00:00:00Z', updated_at: '2025-03-10T00:00:00Z', is_deleted: false },
+  { id: 'rec-27', dataset_id: 'ds-6', indicator: 'PDRB ADHB', region: 'Kabupaten Bangka', period: '2023', value: 19279.60, unit: 'Miliar Rp', notes: 'ADHK: 11.753,74 M', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-03-10T00:00:00Z', updated_at: '2025-03-10T00:00:00Z', is_deleted: false },
+  { id: 'rec-28', dataset_id: 'ds-6', indicator: 'PDRB ADHB', region: 'Kabupaten Bangka', period: '2024', value: 20003.49, unit: 'Miliar Rp', notes: 'ADHK: 11.702,39 M', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-2', created_at: '2025-03-10T00:00:00Z', updated_at: '2025-03-10T00:00:00Z', is_deleted: false },
+
+  // IPG
+  { id: 'rec-29', dataset_id: 'ds-7', indicator: 'Indeks Pembangunan Gender', region: 'Kabupaten Bangka', period: '2020', value: 88.48, unit: 'Indeks', notes: 'Realisasi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-03-15T00:00:00Z', updated_at: '2025-03-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-30', dataset_id: 'ds-7', indicator: 'Indeks Pembangunan Gender', region: 'Kabupaten Bangka', period: '2021', value: 88.36, unit: 'Indeks', notes: 'Realisasi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-03-15T00:00:00Z', updated_at: '2025-03-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-31', dataset_id: 'ds-7', indicator: 'Indeks Pembangunan Gender', region: 'Kabupaten Bangka', period: '2022', value: 88.84, unit: 'Indeks', notes: 'Realisasi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-03-15T00:00:00Z', updated_at: '2025-03-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-32', dataset_id: 'ds-7', indicator: 'Indeks Pembangunan Gender', region: 'Kabupaten Bangka', period: '2023', value: 89.24, unit: 'Indeks', notes: 'Realisasi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-03-15T00:00:00Z', updated_at: '2025-03-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-33', dataset_id: 'ds-7', indicator: 'Indeks Pembangunan Gender', region: 'Kabupaten Bangka', period: '2024', value: 89.07, unit: 'Indeks', notes: 'Realisasi', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-03-15T00:00:00Z', updated_at: '2025-03-15T00:00:00Z', is_deleted: false },
+  { id: 'rec-34', dataset_id: 'ds-7', indicator: 'Indeks Pembangunan Gender', region: 'Kabupaten Bangka', period: '2025', value: 89.36, unit: 'Indeks', notes: 'Naik dari 2024', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-03-15T00:00:00Z', updated_at: '2025-03-15T00:00:00Z', is_deleted: false },
+
+  // RLS
+  { id: 'rec-35', dataset_id: 'ds-8', indicator: 'Rata-Rata Lama Sekolah (RLS)', region: 'Kabupaten Bangka', period: '2021', value: 8.25, unit: 'Tahun', notes: 'HLS: 12.78', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-04-01T00:00:00Z', updated_at: '2025-04-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-36', dataset_id: 'ds-8', indicator: 'Rata-Rata Lama Sekolah (RLS)', region: 'Kabupaten Bangka', period: '2022', value: 8.27, unit: 'Tahun', notes: 'HLS: 12.80', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-04-01T00:00:00Z', updated_at: '2025-04-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-37', dataset_id: 'ds-8', indicator: 'Rata-Rata Lama Sekolah (RLS)', region: 'Kabupaten Bangka', period: '2023', value: 8.32, unit: 'Tahun', notes: 'HLS: 13.11', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-04-01T00:00:00Z', updated_at: '2025-04-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-38', dataset_id: 'ds-8', indicator: 'Rata-Rata Lama Sekolah (RLS)', region: 'Kabupaten Bangka', period: '2024', value: 8.45, unit: 'Tahun', notes: 'HLS: 13.12', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-1', created_at: '2025-04-01T00:00:00Z', updated_at: '2025-04-01T00:00:00Z', is_deleted: false },
+  { id: 'rec-39', dataset_id: 'ds-8', indicator: 'Rata-Rata Lama Sekolah (RLS)', region: 'Kabupaten Bangka', period: '2025', value: 8.77, unit: 'Tahun', notes: 'HLS: 13.13', source: 'BPS', status: DataStatus.PUBLISHED, created_by: 'user-1', updated_by: 'user-2', created_at: '2025-04-01T00:00:00Z', updated_at: '2025-04-01T00:00:00Z', is_deleted: false },
+];
+
+const DEFAULT_REVIEWS: ReviewRequest[] = [
+  {
+    id: 'rev-1',
+    dataset_id: 'ds-1',
+    dataset_name: 'Jumlah Penduduk Kabupaten Bangka',
+    record_ids: ['rec-5'],
+    description: 'Pembaruan data Proyeksi Penduduk 2025 hasil SP2020 resmi.',
+    submitted_by: 'user-1',
+    submitted_by_name: 'Ahmad Fauzi',
+    submitted_at: '2025-10-01T09:00:00Z',
+    status: 'APPROVED',
+    reviewed_by: 'user-2',
+    reviewed_by_name: 'Siti Nurhaliza',
+    reviewed_at: '2025-10-01T10:30:00Z',
+  }
+];
+
+const DEFAULT_AUDIT_LOGS: AuditLog[] = [
+  {
+    id: 'log-1',
+    entity_type: 'dataset',
+    entity_id: 'ds-1',
+    entity_name: 'Jumlah Penduduk Kabupaten Bangka',
+    action: AuditAction.PUBLISH,
+    changes: [{ field: 'status', old_value: 'REVIEW', new_value: 'PUBLISHED' }],
+    user_id: 'user-2',
+    user_name: 'Siti Nurhaliza',
+    reason: 'Data proyeksi penduduk resmi telah diverifikasi.',
+    created_at: '2025-10-01T10:30:00Z',
+  }
+];
+
+let globalStore: BackendStore | null = null;
+
+export function loadBackendStore(): BackendStore {
+  if (globalStore) return globalStore;
+
+  if (fs.existsSync(STORE_FILE)) {
+    try {
+      const content = fs.readFileSync(STORE_FILE, 'utf-8');
+      globalStore = JSON.parse(content);
+      if (globalStore && Array.isArray(globalStore.datasets)) {
+        return globalStore;
+      }
+    } catch (err) {
+      console.warn('[WARN] Gagal membaca db_store.json, menggunakan inisialisasi default:', err);
+    }
+  }
+
+  globalStore = {
+    datasets: [...DEFAULT_DATASETS],
+    records: [...DEFAULT_RECORDS],
+    users: [...DEFAULT_USERS],
+    reviews: [...DEFAULT_REVIEWS],
+    auditLogs: [...DEFAULT_AUDIT_LOGS],
+    categories: [...DEFAULT_CATEGORIES],
+  };
+
+  saveBackendStore(globalStore);
+  return globalStore;
+}
+
+export function saveBackendStore(store: BackendStore): boolean {
+  try {
+    globalStore = store;
+    fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), 'utf-8');
+    return true;
+  } catch (err) {
+    console.error('[ERROR] Gagal menyimpan backend store ke disk:', err);
+    return false;
+  }
+}
+
+/**
+ * Sinkronisasi otomatis data statistik terbitan ke FAQ CSV agar WhatsApp Bot langsung up to date.
+ */
+export function syncDataToFAQ(datasetName: string, indicator: string, year: string, value: string | number, unit: string) {
+  try {
+    const currentFaq = loadFAQData();
+    const cleanKey = datasetName.trim();
+    
+    if (currentFaq[cleanKey]) {
+      const addition = `<br>• *${year} (${indicator}):* *${value} ${unit}*`;
+      if (!currentFaq[cleanKey].includes(`${year}`)) {
+        currentFaq[cleanKey] = currentFaq[cleanKey] + addition;
+        saveFAQData(currentFaq);
+      }
+    }
+  } catch (e) {
+    console.warn('[WARN] Gagal sinkronisasi data ke FAQ CSV:', e);
+  }
+}
