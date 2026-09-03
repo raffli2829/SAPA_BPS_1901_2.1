@@ -1,50 +1,69 @@
 @echo off
-title SAPA BPS - Unified Launcher (Frontend & Backend)
+title SAPA BPS - Backend WhatsApp Server dan Ngrok Tunnel
 color 0A
 cd /d "%~dp0"
 
-echo ===================================================================
-echo     SAPA BPS KABUPATEN BANGKA - SISTEM TERPADU FRONTEND & BACKEND
-echo ===================================================================
-echo.
-
-:: 1. Jalankan Backend Express di folder backend
-echo [1/3] Menyiapkan Backend Server & NLP Engine (Port 8000)...
-start "SAPA BPS - [Backend & NLP Engine]" /D "%~dp0backend" cmd /k "npm run dev"
-
-:: 2. Jalankan Frontend Next.js di folder frontend
-echo [2/3] Menyiapkan Frontend Next.js Web Admin (Port 3000)...
-start "SAPA BPS - [Frontend Next.js]" /D "%~dp0frontend" cmd /k "npm run dev"
-
-:: 3. Deteksi Alamat IP Wi-Fi Komputer
-echo [3/3] Mendeteksi Alamat IP Jaringan Wi-Fi...
-set LOCAL_IP=192.168.1.41
-for /f "tokens=*" %%i in ('powershell -Command "(Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias 'Wi-Fi*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty IPAddress -First 1)"') do (
-    if not "%%i"=="" set LOCAL_IP=%%i
+:: Pastikan Node.js terdaftar di PATH
+if exist "C:\Users\Acer\nodejs" (
+    set "PATH=C:\Users\Acer\nodejs;%SystemRoot%\System32\WindowsPowerShell\v1.0;%SystemRoot%\system32;%SystemRoot%;%PATH%"
 )
 
-echo Menunggu server siap dimuat (5 detik)...
-timeout /t 5 /nobreak >nul
+echo ===================================================================
+echo   SAPA BPS KABUPATEN BANGKA - BACKEND WHATSAPP DAN NGROK SERVER
+echo ===================================================================
+echo.
+
+:: 1. Deteksi IP Ethernet LAN
+set "LAN_IP=127.0.0.1"
+for /f %%i in ('powershell -NoProfile -Command "(Get-NetIPAddress -InterfaceAlias 'Ethernet' -AddressFamily IPv4 -ErrorAction SilentlyContinue).IPAddress"') do (
+    set "LAN_IP=%%i"
+)
+
+:: 2. Cek dan Auto-Start Ngrok Tunnel (Port 80)
+echo [1/2] Memeriksa status Ngrok Tunnel Port 80...
+tasklist /FI "IMAGENAME eq ngrok.exe" 2>nul | find /i "ngrok.exe" >nul
+if %errorlevel% equ 0 (
+    echo [OK] Ngrok Tunnel sudah aktif di latar belakang.
+) else (
+    echo [INFO] Menyalakan Ngrok Tunnel port 80 dengan Watchdog Auto-Recovery...
+    if exist "C:\ngrok\ngrok_silent.vbs" (
+        start "" wscript.exe "C:\ngrok\ngrok_silent.vbs"
+        echo [OK] Ngrok Tunnel dan Watchdog berhasil dinyalakan.
+    ) else (
+        if exist "C:\ngrok\ngrok.exe" (
+            start "SAPA BPS - [Ngrok Tunnel]" /min "C:\ngrok\ngrok.exe" http 127.0.0.1:80 --url https://footless-aptitude-caloric.ngrok-free.dev --log C:\ngrok\logs\ngrok.log --log-format logfmt
+            echo [OK] Ngrok Tunnel berhasil dijalankan di latar belakang.
+        ) else (
+            echo [WARNING] C:\ngrok\ngrok.exe tidak ditemukan.
+        )
+    )
+)
+echo.
+
+echo [2/2] Menyiapkan Backend WhatsApp Server dan NLP Engine pada Port 80...
+start "SAPA BPS - [Backend WhatsApp dan NLP]" cmd /k "cd /d "%~dp0backend" && set "PATH=C:\Users\Acer\nodejs;%%PATH%%" && npm run dev"
+
+echo Menunggu Backend siap...
+ping 127.0.0.1 -n 4 >nul
 
 echo.
 echo ===================================================================
-echo   SISTEM BERHASIL DIJALANKAN & TERHUBUNG KE JARINGAN LOKAL!
-echo.
-echo   [1] Akses dari Komputer Ini (Laptop Utama):
-echo       * Web Dashboard : http://localhost:3000
-echo       * Backend API   : http://localhost:8000
-echo.
-echo   [2] Akses dari HP / Laptop Lain (Satu Wi-Fi):
-echo       * Buka Browser di HP : http://%LOCAL_IP%:3000
-echo.
-echo   [3] Catatan Penting Akses dari HP:
-echo       - Pastikan HP terhubung ke Wi-Fi yang sama: "BPS BANGKA ATAS 5G"
-echo       - Jendela "Frontend Next.js" dan "Backend" harus tetap terbuka
+echo   BACKEND WHATSAPP DAN REST API TELAH AKTIF!
+echo ===================================================================
+echo   - Localhost Windows         : http://localhost:80
+echo   - Jaringan Ethernet (LAN)   : http://%LAN_IP%:80
+echo   - Public HTTPS (Ngrok Dev)  : https://footless-aptitude-caloric.ngrok-free.dev
+echo   - Health Check Endpoint     : https://footless-aptitude-caloric.ngrok-free.dev/health
 echo ===================================================================
 echo.
-echo Membuka browser Web Admin Dashboard...
-start http://localhost:3000
-
+echo   INFORMASI UNTUK TEMAN (FRONTEND DEVELOPER):
+echo   Kirimkan konfigurasi environment berikut ke teman Anda:
+echo   ---------------------------------------------------------------
+echo   NEXT_PUBLIC_BACKEND_URL=https://footless-aptitude-caloric.ngrok-free.dev
+echo   NEXT_PUBLIC_API_KEY=sapa_bps_secure_token_2026
+echo   ---------------------------------------------------------------
 echo.
-echo [INFO] Jangan tutup jendela terminal ini jika masih menggunakan aplikasi.
+echo Komputer ini bertindak sebagai SERVER BACKEND.
+echo Jangan tutup jendela terminal ini jika masih menggunakan bot WhatsApp.
+echo.
 pause

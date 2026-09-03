@@ -1,0 +1,89 @@
+================================================================================
+          PANDUAN LENGKAP PENGGUNAAN SISTEM SAPA BPS KABUPATEN BANGKA
+              (SERVER BACKEND WHATSAPP & NGROK TUNNEL PORT 80)
+================================================================================
+
+Komputer Windows ini berfungsi khusus sebagai:
+👉 SERVER BACKEND WHATSAPP, MESIN NLP, DAN NGROK TUNNEL.
+
+Bagian Frontend / Web Admin TIDAK dijalankan di komputer ini, melainkan
+dijalankan secara terpisah oleh rekan/teman Anda di laptopnya atau di hosting.
+
+--------------------------------------------------------------------------------
+1. CARA MENJALANKAN SERVER BACKEND
+--------------------------------------------------------------------------------
+
+A. CARA 1: OTOMATIS SAAT KOMPUTER DINYALAKAN (PALING MUDAH)
+   - Anda TIDAK PERLU membuka file apa pun!
+   - Begitu Anda menyalakan komputer dan login ke Windows:
+     1. Tunnel Ngrok otomatis aktif di latar belakang (tanpa jendela CMD hitam).
+     2. Watchdog auto-recovery langsung aktif memantau ngrok 24 jam.
+     3. Backend WhatsApp (Port 80) otomatis menyala.
+
+B. CARA 2: MANUAL SATU KALI KLIK
+   - Buka folder project:
+     C:\Users\Acer\Desktop\SAPA Asisten\SAPA_BPS_1901_2.1
+   - Klik dua kali file:
+     👉 START_SAPA_BPS.bat
+   - Terminal akan otomatis memastikan Ngrok dan Backend WhatsApp menyala di Port 80.
+   - CATATAN: Jangan tutup jendela terminal utama selama bot WhatsApp digunakan.
+
+C. CARA 3: MENGONTROL NGROK SAJA SECARA MANDIRI
+   - Menyalakan Ngrok : Klik dua kali 👉 START_NGROK.bat
+   - Mematikan Ngrok  : Klik dua kali 👉 STOP_NGROK.bat
+
+--------------------------------------------------------------------------------
+2. DATA YANG PERLU DIBERIKAN KEPADA TEMAN ANDA (FRONTEND DEVELOPER)
+--------------------------------------------------------------------------------
+
+Agar frontend yang dikembangkan teman Anda di laptopnya (atau di hosting)
+dapat terhubung dan berkomunikasi lancar dengan Backend WhatsApp Anda:
+
+Kirimkan teks konfigurasi berikut ke teman Anda:
+
+===================================================================
+KONFIGURASI ENV UNTUK FRONTEND TEMAN:
+-------------------------------------------------------------------
+NEXT_PUBLIC_BACKEND_URL=https://footless-aptitude-caloric.ngrok-free.dev
+BACKEND_URL=https://footless-aptitude-caloric.ngrok-free.dev
+NEXT_PUBLIC_API_KEY=sapa_bps_secure_token_2026
+-------------------------------------------------------------------
+
+Teman Anda cukup meletakkan variabel di atas ke file `.env.local` 
+di laptopnya atau di dashboard hostingnya (misal: Vercel / Netlify).
+
+--------------------------------------------------------------------------------
+3. DAFTAR ALAMAT AKSES (URL) BACKEND
+--------------------------------------------------------------------------------
+
+A. Backend WhatsApp & REST API Server (Port 80):
+   - Akses Lokal Komputer Ini  : http://localhost:80
+   - Akses Jaringan Kantor LAN : http://192.168.1.100:80
+   - Akses Publik Global Ngrok : https://footless-aptitude-caloric.ngrok-free.dev
+
+B. Pengecekan Status Server (Health Check):
+   👉 https://footless-aptitude-caloric.ngrok-free.dev/health
+   (Bisa dibuka dari HP atau laptop teman Anda untuk mengecek apakah backend Anda online)
+
+--------------------------------------------------------------------------------
+4. FITUR AUTO-RECOVERY WATCHDOG (ANTI-MATI 24/7)
+--------------------------------------------------------------------------------
+
+- Komputer ini sudah dilengkapi dengan Watchdog Pengawas 24 Jam.
+- Jika internet terputus lalu tersambung kembali, atau komputer baru bangun
+  dari mode Sleep/Hibernate:
+  => Watchdog akan secara otomatis mendeteksi dan menyalakan kembali tunnel ngrok
+     dalam waktu 3 detik tanpa Anda perlu menyentuh komputer atau membuka file.
+
+--------------------------------------------------------------------------------
+5. STATUS BOT WHATSAPP
+--------------------------------------------------------------------------------
+
+- Sesi login WhatsApp disimpan secara permanen di:
+  C:\Users\Acer\Desktop\SAPA Asisten\SAPA_BPS_1901_2.1\backend\auth_info
+- Setelah pertama kali scan QR, sesi akan tersimpan dan tidak perlu scan QR lagi 
+  setiap kali komputer dinyalakan.
+
+================================================================================
+                    TIM PENGEMBANG SAPA BPS KABUPATEN BANGKA
+================================================================================

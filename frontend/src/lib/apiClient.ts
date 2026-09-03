@@ -12,27 +12,56 @@ import {
   DashboardSummary,
 } from './types';
 
-const BASE_URL = typeof window !== 'undefined' ? '' : (process.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:8000');
+// ============================================================
+// Konfigurasi Terpusat Base URL Backend WhatsApp
+// ============================================================
+// 1. Pada lingkungan lokal (localhost / 127.0.0.1 / IP LAN):
+//    Gunakan URL relatif '' agar request diproxy oleh Next.js server tanpa hambatan CORS / interstitial ngrok.
+// 2. Pada hosting publik (Vercel / Netlify / custom domain):
+//    Gunakan NEXT_PUBLIC_BACKEND_URL (https://footless-aptitude-caloric.ngrok-free.dev).
+const isClient = typeof window !== 'undefined';
+const isLocalOrigin = isClient && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname.startsWith('192.168.') ||
+  window.location.hostname.startsWith('10.') ||
+  window.location.hostname.startsWith('172.')
+);
+
+const RAW_BACKEND_URL = isLocalOrigin
+  ? ''
+  : (process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || (isClient ? '' : (process.env.BACKEND_INTERNAL_URL || 'http://localhost:80')));
+
+const BASE_URL = RAW_BACKEND_URL ? RAW_BACKEND_URL.replace(/\/$/, '') : '';
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
 
 async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
   try {
-    const res = await fetch(url, {
+    const fullUrl = url.startsWith('http')
+      ? url
+      : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+      ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
+      ...(options?.headers as Record<string, string> || {}),
+    };
+
+    const res = await fetch(fullUrl, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options?.headers || {}),
-      },
+      headers,
     });
 
     if (!res.ok) {
-      console.warn(`[API] HTTP ${res.status} pada ${url}`);
+      console.warn(`[API] HTTP ${res.status} pada ${fullUrl}`);
       return null;
     }
 
     const json = await res.json();
     return json?.data !== undefined ? json.data : json;
-  } catch {
-    // Backend mungkin belum running atau offline
+  } catch (err) {
+    console.error(`[API Network Error] Gagal menghubungi backend di ${url}:`, err);
     return null;
   }
 }
