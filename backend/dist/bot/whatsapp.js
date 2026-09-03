@@ -89,7 +89,7 @@ export async function startWhatsAppBot() {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger)
         },
-        browser: Browsers.windows('Desktop'),
+        browser: Browsers.ubuntu('Chrome'),
         syncFullHistory: false,
         markOnlineOnConnect: false,
         generateHighQualityLinkPreview: false,

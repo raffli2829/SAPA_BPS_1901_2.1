@@ -36,31 +36,53 @@ const BASE_URL = RAW_BACKEND_URL ? RAW_BACKEND_URL.replace(/\/$/, '') : '';
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
 
 async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+    ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
+    ...(options?.headers as Record<string, string> || {}),
+  };
+
+  const path = url.startsWith('/') ? url : `/${url}`;
+  const fullUrl = url.startsWith('http')
+    ? url
+    : (BASE_URL ? `${BASE_URL}${path}` : path);
+
   try {
-    const fullUrl = url.startsWith('http')
-      ? url
-      : `${BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-      ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
-      ...(options?.headers as Record<string, string> || {}),
-    };
-
     const res = await fetch(fullUrl, {
       ...options,
       headers,
     });
 
-    if (!res.ok) {
-      console.warn(`[API] HTTP ${res.status} pada ${fullUrl}`);
-      return null;
+    if (res.ok) {
+      const json = await res.json();
+      return json?.data !== undefined ? json.data : json;
     }
 
-    const json = await res.json();
-    return json?.data !== undefined ? json.data : json;
+    // Jika proxy gagal (misal 500) saat di lingkungan lokal, coba tembak langsung port 80 backend
+    if (isLocalOrigin && !fullUrl.startsWith('http://127.0.0.1:80') && !fullUrl.startsWith('http://localhost:80')) {
+      try {
+        const directRes = await fetch(`http://127.0.0.1:80${path}`, { ...options, headers });
+        if (directRes.ok) {
+          const json = await directRes.json();
+          return json?.data !== undefined ? json.data : json;
+        }
+      } catch {}
+    }
+
+    console.warn(`[API] HTTP ${res.status} pada ${fullUrl}`);
+    return null;
   } catch (err) {
+    // Fallback jika fetch network error di local origin
+    if (isLocalOrigin && !fullUrl.startsWith('http://127.0.0.1:80') && !fullUrl.startsWith('http://localhost:80')) {
+      try {
+        const directRes = await fetch(`http://127.0.0.1:80${path}`, { ...options, headers });
+        if (directRes.ok) {
+          const json = await directRes.json();
+          return json?.data !== undefined ? json.data : json;
+        }
+      } catch {}
+    }
     console.error(`[API Network Error] Gagal menghubungi backend di ${url}:`, err);
     return null;
   }
