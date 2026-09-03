@@ -37,7 +37,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         >
           {React.Children.map(children, (child) => {
-            if (React.isValidElement(child)) {
+            // Hanya pass onMobileMenuOpen pada React Component kustom, hindari tag HTML native (div, section, main, dsb)
+            if (React.isValidElement(child) && typeof child.type !== 'string') {
               return React.cloneElement(child as React.ReactElement<{ onMobileMenuOpen?: () => void }>, {
                 onMobileMenuOpen: openMobileMenu,
               });
