@@ -14,17 +14,18 @@ import {
   Pagination,
   EmptyState,
   TableSkeleton,
+  Toast,
 } from '@/components/ui';
 import { DatasetRepo, RecordRepo, subscribe } from '@/lib/repository';
 import { CATEGORIES } from '@/lib/mock-data';
 import { Dataset, DataStatus } from '@/lib/types';
 import { formatDateShort, getPeriodRange, formatNumber } from '@/lib/utils';
-import { Plus, Database, ArrowUpDown, ChevronRight, Filter } from 'lucide-react';
+import { Plus, Database, ArrowUpDown, ChevronRight, Filter, Trash2 } from 'lucide-react';
 
 const PAGE_SIZE = 10;
 
 export default function DatasetsPage() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
   const [datasets, setDatasets] = useState<Dataset[]>(() => {
     try {
@@ -40,6 +41,23 @@ export default function DatasetsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState<'updated_at' | 'name'>('updated_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  const handleDeleteDataset = (e: React.MouseEvent, ds: Dataset) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (
+      confirm(
+        `HAPUS DATASET?\n\nNama: "${ds.name}" (${ds.code})\n\nSeluruh data di dalam dataset ini akan dihapus dari sistem. Gunakan opsi ini jika salah membuat dataset.`
+      )
+    ) {
+      if (user) {
+        DatasetRepo.delete(ds.id, user.id, user.name);
+        setDatasets(DatasetRepo.getAll());
+        setToast({ msg: `Dataset "${ds.name}" berhasil dihapus.`, type: 'success' });
+      }
+    }
+  };
 
   useEffect(() => {
     if (isLoading) return;
@@ -133,7 +151,15 @@ export default function DatasetsPage() {
             setSortOrder('desc');
           }
         }}
+        onDeleteDataset={handleDeleteDataset}
       />
+      {toast && (
+        <Toast
+          message={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </AppLayout>
   );
 }
@@ -153,6 +179,7 @@ function PageContent({
   sortBy,
   sortOrder,
   onSort,
+  onDeleteDataset,
   onMobileMenuOpen,
 }: {
   datasets: Dataset[];
@@ -169,6 +196,7 @@ function PageContent({
   sortBy: string;
   sortOrder: string;
   onSort: (field: 'updated_at' | 'name') => void;
+  onDeleteDataset: (e: React.MouseEvent, ds: Dataset) => void;
   onMobileMenuOpen?: () => void;
 }) {
   return (
@@ -323,11 +351,30 @@ function PageContent({
                         </td>
                         <td style={{ fontSize: 12, color: '#64748b' }}>{formatDateShort(ds.updated_at)}</td>
                         <td className="cell-actions">
-                          <Link href={`/datasets/${ds.id}`} title="Buka Detail">
-                            <Button variant="ghost" size="sm" style={{ padding: '0 6px', height: 28 }}>
-                              <ChevronRight size={16} />
-                            </Button>
-                          </Link>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Link href={`/datasets/${ds.id}`} title="Buka Detail">
+                              <Button variant="ghost" size="sm" style={{ padding: '0 6px', height: 28 }}>
+                                <ChevronRight size={16} />
+                              </Button>
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={(e) => onDeleteDataset(e, ds)}
+                              title="Hapus Dataset"
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--error-text)',
+                                cursor: 'pointer',
+                                padding: 6,
+                                display: 'flex',
+                                alignItems: 'center',
+                                borderRadius: 4,
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

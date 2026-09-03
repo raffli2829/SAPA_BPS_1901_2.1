@@ -165,6 +165,16 @@ export default function DatasetDetailPage() {
     setEditingRecord(null);
   };
 
+  const handleDeleteDataset = () => {
+    if (!user || !dataset) return;
+    try {
+      DatasetRepo.delete(dataset.id, user.id, user.name);
+      router.push('/datasets');
+    } catch {
+      setToast({ msg: 'Gagal menghapus dataset.', type: 'error' });
+    }
+  };
+
   if (isLoading || !isAuthenticated) return null;
 
   return (
@@ -182,6 +192,7 @@ export default function DatasetDetailPage() {
         onEditRecord={(rec) => setEditingRecord(rec)}
         confirmAction={confirmAction}
         setConfirmAction={setConfirmAction}
+        onDeleteDataset={handleDeleteDataset}
       />
       {editingRecord && dataset && (
         <EditRecordModal
@@ -237,6 +248,7 @@ function PageContent({
   onEditRecord,
   confirmAction,
   setConfirmAction,
+  onDeleteDataset,
   onMobileMenuOpen,
 }: {
   dataset: Dataset | null;
@@ -251,6 +263,7 @@ function PageContent({
   onEditRecord: (rec: DataRecord) => void;
   confirmAction: ConfirmAction | null;
   setConfirmAction: (action: ConfirmAction | null) => void;
+  onDeleteDataset: () => void;
   onMobileMenuOpen?: () => void;
 }) {
   if (loading) {
@@ -383,6 +396,25 @@ function PageContent({
           </Button>
         </>
       )}
+
+      {/* Opsi Hapus Dataset jika salah buat */}
+      <Button
+        variant="danger"
+        size="sm"
+        icon={<Trash2 size={14} />}
+        onClick={() =>
+          setConfirmAction({
+            title: `Hapus Dataset "${dataset.name}"?`,
+            description:
+              'Dataset ini beserta seluruh baris datanya akan dihapus dari sistem. Gunakan opsi ini jika Anda salah membuat dataset.',
+            action: onDeleteDataset,
+            variant: 'danger',
+            confirmLabel: 'Hapus Dataset',
+          })
+        }
+      >
+        Hapus Dataset
+      </Button>
     </div>
   );
 

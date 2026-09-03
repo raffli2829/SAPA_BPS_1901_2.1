@@ -417,31 +417,26 @@ export const DatasetRepo = {
 
   delete(id: string, userId: string, userName: string): boolean {
     const s = getStore();
-    const dataset = s.datasets.find((d) => d.id === id);
-    if (!dataset) return false;
+    const index = s.datasets.findIndex((d) => d.id === id);
+    if (index === -1) return false;
 
-    // Soft delete: archive
-    dataset.status = DataStatus.ARCHIVED;
-    dataset.updated_by = userId;
-    dataset.updated_at = new Date().toISOString();
+    const dataset = s.datasets[index];
 
-    // Soft delete records
-    s.records
-      .filter((r) => r.dataset_id === id)
-      .forEach((r) => {
-        r.is_deleted = true;
-        r.updated_by = userId;
-        r.updated_at = new Date().toISOString();
-      });
+    // Hapus total dataset dari daftar agar tidak muncul di katalog jika salah buat
+    s.datasets.splice(index, 1);
+
+    // Hapus seluruh data record terkait dataset ini
+    s.records = s.records.filter((r) => r.dataset_id !== id);
 
     AuditRepo.log({
       entity_type: 'dataset',
       entity_id: id,
       entity_name: dataset.name,
       action: AuditAction.ARCHIVE,
-      changes: [],
+      changes: [{ field: 'dataset', old_value: dataset.name, new_value: null }],
       user_id: userId,
       user_name: userName,
+      reason: 'Dataset dihapus oleh pengguna karena salah buat',
     });
 
     BackendApi.deleteDataset(id).catch(() => {});
@@ -1169,11 +1164,19 @@ export const ChatbotTemplateRepo = {
       source_type: 'MANUAL' as const,
     }));
 
-    // Auto-generate template dari dataset yang ada di pangkalan data BPS (Read-only / Preview saja)
-    const datasetTemplates: ChatbotTemplate[] = DatasetRepo.getAll().map((ds) => {
-      const records = getStore()
-        .records.filter((r) => r.dataset_id === ds.id && !r.is_deleted && r.value !== null)
-        .sort((a, b) => b.period.localeCompare(a.period));
+    // Auto-generate template dari dataset yang ada di pangkalan data BPS (HANYA DATASET YANG SUDAH BERSTATUS PUBLISHED!)
+    const datasetTemplates: ChatbotTemplate[] = DatasetRepo.getAll()
+      .filter((ds) => ds.status === DataStatus.PUBLISHED)
+      .map((ds) => {
+        const records = getStore()
+          .records.filter(
+            (r) =>
+              r.dataset_id === ds.id &&
+              !r.is_deleted &&
+              r.value !== null &&
+              r.status === DataStatus.PUBLISHED
+          )
+          .sort((a, b) => b.period.localeCompare(a.period));
 
       let dataSummary = '';
       if (records.length > 0) {
