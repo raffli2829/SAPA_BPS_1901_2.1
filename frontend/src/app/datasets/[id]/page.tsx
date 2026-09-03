@@ -39,6 +39,7 @@ import {
   Archive,
   ArrowLeft,
   Trash2,
+  RotateCcw,
   Database,
   Layers,
   MapPin,
@@ -393,6 +394,46 @@ function PageContent({
             }
           >
             Arsipkan
+          </Button>
+        </>
+      )}
+
+      {/* Jika status saat ini adalah DIARSIPKAN (ARCHIVED), sediakan opsi Publikasikan Ulang & Pulihkan ke Draf */}
+      {dataset.status === DataStatus.ARCHIVED && (
+        <>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<CheckCircle size={14} />}
+            onClick={() =>
+              setConfirmAction({
+                title: 'Publikasikan Ulang Dataset?',
+                description:
+                  'Dataset ini akan diaktifkan kembali dari arsip dan langsung dipublikasikan ke katalog serta layanan chatbot SAPA BPS.',
+                action: () => onStatusChange(DataStatus.PUBLISHED),
+                variant: 'default',
+                confirmLabel: 'Publikasikan Ulang',
+              })
+            }
+          >
+            Publikasikan Ulang
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RotateCcw size={14} />}
+            onClick={() =>
+              setConfirmAction({
+                title: 'Pulihkan ke Status Draf?',
+                description:
+                  'Dataset akan dikembalikan ke status draf sehingga Anda dapat memperbarui data atau mengeditnya terlebih dahulu sebelum dipublikasikan.',
+                action: () => onStatusChange(DataStatus.DRAFT, 'Dipulihkan dari arsip'),
+                variant: 'default',
+                confirmLabel: 'Pulihkan ke Draf',
+              })
+            }
+          >
+            Pulihkan ke Draf
           </Button>
         </>
       )}
