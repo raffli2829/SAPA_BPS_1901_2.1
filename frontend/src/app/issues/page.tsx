@@ -12,6 +12,7 @@ import { Dataset, DataRecord, DataStatus } from '@/lib/types';
 import {
   AlertTriangle,
   CheckCircle2,
+  ShieldCheck,
   ArrowRight,
   TrendingUp,
   TrendingDown,
@@ -204,8 +205,8 @@ export default function AnomalyPage() {
   return (
     <AppLayout>
       <Header
-        title="Data Anomali & Peringatan"
-        subtitle="Deteksi otomatis data statistik dengan perubahan atau lonjakan signifikan antar periode"
+        title="Verifikasi Data"
+        subtitle="Pemeriksaan dan persetujuan data statistik lapangan yang mengalami fluktuasi signifikan"
       />
 
       <div className="page-content" style={{ maxWidth: 1180 }}>
@@ -232,7 +233,7 @@ export default function AnomalyPage() {
           >
             <div>
               <p style={{ fontSize: 12.5, color: 'var(--slate-500)', margin: 0, fontWeight: 500 }}>
-                Total Anomali Terdeteksi
+                Total Perlu Verifikasi
               </p>
               <h3 style={{ fontSize: 24, fontWeight: 700, margin: '4px 0 0', color: 'var(--slate-900)' }}>
                 {anomalies.length} Data
@@ -332,11 +333,11 @@ export default function AnomalyPage() {
           <div className="section-header" style={{ flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h2 className="section-title">
-                <AlertTriangle size={18} style={{ color: '#d97706' }} />
-                Daftar Peringatan Data Anomali
+                <ShieldCheck size={18} style={{ color: 'var(--primary-600)' }} />
+                Daftar Verifikasi Data Statistik
               </h2>
               <p className="section-subtitle">
-                Data dengan fluktuasi drastis (&gt; 25%) ditampilkan untuk diverifikasi keabsahannya atau dihapus jika merupakan bug / typo
+                Data dengan fluktuasi signifikan (&gt; 25%) ditampilkan untuk diverifikasi keabsahannya sesuai data riil lapangan
               </p>
             </div>
 
@@ -416,11 +417,11 @@ export default function AnomalyPage() {
           <div className="section-body">
             {filteredAnomalies.length === 0 ? (
               <EmptyState
-                title="Tidak Ada Data Anomali"
+                title="Semua Data Terverifikasi"
                 description={
                   search
-                    ? `Tidak ada data anomali yang cocok dengan pencarian "${search}".`
-                    : 'Seluruh data statistik berjalan normal tanpa lonjakan atau fluktuasi ekstrem.'
+                    ? `Tidak ada data yang cocok dengan pencarian "${search}".`
+                    : 'Seluruh data statistik telah terverifikasi dan berjalan normal tanpa fluktuasi ekstrem.'
                 }
               />
             ) : (
@@ -659,10 +660,10 @@ export default function AnomalyPage() {
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--slate-900)' }}>
-                  Konfirmasi Data Anomali Valid
+                  Konfirmasi Verifikasi Data Lapangan
                 </h3>
                 <p style={{ margin: '2px 0 0', fontSize: 12.5, color: 'var(--slate-500)' }}>
-                  Menyatakan lonjakan nilai {approveTarget.period} adalah data riil resmi
+                  Menyatakan angka periode {approveTarget.period} adalah data riil resmi BPS
                 </p>
               </div>
             </div>
