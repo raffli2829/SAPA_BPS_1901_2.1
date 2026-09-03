@@ -215,16 +215,21 @@ export default function KeywordsPage() {
 
       // Bangun daftar menu dinamis: Semua dataset terbitan + 2 opsi layanan selalu di 2 posisi terbawah
       const datasetTemplates = templates.filter((t) => t.source_type === 'DATASET' && t.id !== 'tpl-system-menu');
+      const seenLabels = new Set<string>();
       let mIdx = 1;
       const dynamicItems: { num: number; label: string; type: 'dataset' | 'service'; response?: string }[] = [];
 
       datasetTemplates.forEach((dt) => {
-        dynamicItems.push({
-          num: mIdx++,
-          label: dt.keyword,
-          type: 'dataset',
-          response: dt.response,
-        });
+        const lower = dt.keyword.trim().toLowerCase();
+        if (!seenLabels.has(lower)) {
+          seenLabels.add(lower);
+          dynamicItems.push({
+            num: mIdx++,
+            label: dt.keyword,
+            type: 'dataset',
+            response: dt.response,
+          });
+        }
       });
 
       const s1Num = mIdx++;
@@ -245,15 +250,10 @@ export default function KeywordsPage() {
           `🏛️ *LAYANAN KONSULTASI STATISTIK TERPADU (PST)*\n*BPS Kabupaten Bangka*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏢 *Alamat:* Jl. Ahmad Yani Jalur Dua Sungailiat\n⏰ *Jam Layanan:* Senin – Jumat (08.00 – 15.30 WIB)\n📞 *WhatsApp PST:* https://wa.me/6281234567890\n✉️ *Email:* bps1901@bps.go.id\n🌐 *Portal:* bangkakab.bps.go.id`,
       });
 
-      const getEmoji = (n: number) => {
-        const em = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-        return n <= 10 ? em[n - 1] : `*${n}.*`;
-      };
-
       const dynamicMenuStr =
         `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
-        dynamicItems.map((it) => `${getEmoji(it.num)} *${it.label}*`).join('\n') +
+        dynamicItems.map((it) => `${it.num}. *${it.label}*`).join('\n') +
         `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `💡 _Balas dengan angka *1* - *${s2Num}*, atau ketik kata kunci pertanyaan langsung._`;
 

@@ -1216,18 +1216,23 @@ export const ChatbotTemplateRepo = {
 
     // Template Dinamis Menu Utama (Menyusun semua dataset terbitan + 2 opsi layanan selalu di nomor terbawah)
     const publishedDs = DatasetRepo.getAll().filter((d) => d.status === DataStatus.PUBLISHED);
+    const seenCategories = new Set<string>();
+    const mLines: string[] = [];
     let mNum = 1;
-    const mLines = publishedDs.map((ds) => {
-      const n = mNum++;
-      const em = n <= 10 ? ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'][n - 1] : `*${n}.*`;
-      return `${em} *${ds.category || ds.name}*`;
+
+    publishedDs.forEach((ds) => {
+      const label = ds.category || ds.name;
+      const lower = label.trim().toLowerCase();
+      if (!seenCategories.has(lower)) {
+        seenCategories.add(lower);
+        mLines.push(`${mNum++}. *${label}*`);
+      }
     });
+
     const s1 = mNum++;
     const s2 = mNum++;
-    const em1 = s1 <= 10 ? ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'][s1 - 1] : `*${s1}.*`;
-    const em2 = s2 <= 10 ? ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'][s2 - 1] : `*${s2}.*`;
-    mLines.push(`${em1} *Apa saja layanan BPS?*`);
-    mLines.push(`${em2} *Hubungi Petugas PST BPS*`);
+    mLines.push(`${s1}. *Apa saja layanan BPS?*`);
+    mLines.push(`${s2}. *Hubungi Petugas PST BPS*`);
 
     const dynamicMenuTemplate: ChatbotTemplate = {
       id: 'tpl-system-menu',

@@ -1,15 +1,12 @@
 import { loadBackendStore, DataStatus } from '../data/dbStore.js';
-export function getNumberEmoji(num) {
-    const emojis = {
-        1: '1️⃣', 2: '2️⃣', 3: '3️⃣', 4: '4️⃣', 5: '5️⃣',
-        6: '6️⃣', 7: '7️⃣', 8: '8️⃣', 9: '9️⃣', 10: '🔟',
-    };
-    return emojis[num] || `*${num}.*`;
+export function formatMenuNumber(num) {
+    return `${num}.`;
 }
 /**
  * Menghasilkan daftar item menu secara dinamis:
  * 1. Setiap dataset berstatus PUBLISHED otomatis masuk ke daftar pilihan nomor.
- * 2. Opsi layanan (Apa saja layanan BPS & Hubungi Petugas) SELALU berada di 2 nomor terbawah.
+ * 2. Menggunakan penomoran desimal biasa (1., 2., 3., ... 11., 12.) agar rapi untuk banyak dataset (>10).
+ * 3. Opsi layanan (Apa saja layanan BPS & Hubungi Petugas) SELALU berada di 2 nomor terbawah.
  */
 export function getDynamicMenuItems() {
     let publishedDatasets = [];
@@ -21,18 +18,23 @@ export function getDynamicMenuItems() {
         console.warn('[WARN] Gagal memuat backend store untuk menu dinamis:', e);
     }
     const items = [];
+    const seenLabels = new Set();
     let currentNum = 1;
     if (publishedDatasets.length > 0) {
         publishedDatasets.forEach((ds) => {
             const label = ds.category || ds.name;
-            items.push({
-                number: currentNum++,
-                label,
-                type: 'dataset',
-                datasetId: ds.id,
-                datasetName: ds.name,
-                datasetCategory: ds.category,
-            });
+            const lower = label.trim().toLowerCase();
+            if (!seenLabels.has(lower)) {
+                seenLabels.add(lower);
+                items.push({
+                    number: currentNum++,
+                    label,
+                    type: 'dataset',
+                    datasetId: ds.id,
+                    datasetName: ds.name,
+                    datasetCategory: ds.category,
+                });
+            }
         });
     }
     else {
@@ -46,12 +48,16 @@ export function getDynamicMenuItems() {
             "Indeks Pembangunan Gender (IPG)",
         ];
         defaultTopics.forEach((topic) => {
-            items.push({
-                number: currentNum++,
-                label: topic,
-                type: 'dataset',
-                datasetName: topic,
-            });
+            const lower = topic.trim().toLowerCase();
+            if (!seenLabels.has(lower)) {
+                seenLabels.add(lower);
+                items.push({
+                    number: currentNum++,
+                    label: topic,
+                    type: 'dataset',
+                    datasetName: topic,
+                });
+            }
         });
     }
     // 2 Keyword layanan SELALU berada di 2 posisi TERBAWAH
@@ -70,7 +76,7 @@ export function getDynamicMenuItems() {
 export function generateDynamicMenu(faqData) {
     const menuItems = getDynamicMenuItems();
     const lines = menuItems.map((item) => {
-        return `${getNumberEmoji(item.number)} *${item.label}*`;
+        return `${item.number}. *${item.label}*`;
     });
     const lastNum = menuItems[menuItems.length - 1]?.number || 10;
     return (`📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n` +
@@ -79,7 +85,7 @@ export function generateDynamicMenu(faqData) {
         `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
         lines.join('\n') +
         `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `💡 _Balas dengan mengetik *Nomor* (misal: *1* atau *${lastNum}*), ketik pertanyaan langsung (misal: "IPM 2024"), atau ketik *petugas* untuk konsultasi PST._`);
+        `💡 _Balas dengan angka *1* - *${lastNum}*, ketik pertanyaan langsung (misal: "IPM 2024"), atau ketik *petugas* untuk konsultasi PST._`);
 }
 export function getFriendlyGreeting(faqData) {
     return (`Halo! Selamat datang di layanan *SAPA BPS Kab. Bangka* 😊\n` +
