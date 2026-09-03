@@ -3,7 +3,7 @@
     {
       "id": "1788419349379-uhpbiiy",
       "code": "JUML-001",
-      "name": "jumlah umat",
+      "name": "Jumlah Umat",
       "category": "Jumlah Penduduk",
       "description": "",
       "definition": "",
@@ -15,7 +15,7 @@
       "created_by": "user-2",
       "updated_by": "user-2",
       "created_at": "2026-09-03T07:09:09.709Z",
-      "updated_at": "2026-09-03T07:09:33.039Z",
+      "updated_at": "2026-09-03T08:07:44.293Z",
       "record_count": 0
     },
     {
@@ -940,6 +940,57 @@
   ],
   "auditLogs": [
     {
+      "id": "log-dul391xmtl8spt1",
+      "entity_type": "dataset",
+      "entity_id": "1788419349379-uhpbiiy",
+      "entity_name": "Jumlah Umat",
+      "action": "UPDATE",
+      "changes": [
+        {
+          "field": "updated",
+          "old_value": "2026-09-03T07:09:33.039Z",
+          "new_value": "2026-09-03T08:07:44.293Z"
+        }
+      ],
+      "user_id": "user-1",
+      "user_name": "Petugas",
+      "created_at": "2026-09-03T08:07:44.293Z"
+    },
+    {
+      "id": "1788422863998-8iq2o6p",
+      "entity_type": "dataset",
+      "entity_id": "1788419349379-uhpbiiy",
+      "entity_name": "Jumlah Umat",
+      "action": "UPDATE",
+      "changes": [
+        {
+          "field": "name",
+          "old_value": "jumlah umat",
+          "new_value": "Jumlah Umat"
+        }
+      ],
+      "user_id": "user-1",
+      "user_name": "Ahmad Fauzi",
+      "created_at": "2026-09-03T08:07:44.000Z"
+    },
+    {
+      "id": "log-xvo172rmtl8j96s",
+      "entity_type": "dataset",
+      "entity_id": "ds-7ky4zscmtl8j96s",
+      "entity_name": "Test Dataset Proxy",
+      "action": "CREATE",
+      "changes": [
+        {
+          "field": "status",
+          "old_value": null,
+          "new_value": "DRAFT"
+        }
+      ],
+      "user_id": "user-1",
+      "user_name": "Ahmad Fauzi",
+      "created_at": "2026-09-03T08:00:22.852Z"
+    },
+    {
       "id": "log-4e8waf8mtl6pvxr",
       "entity_type": "dataset",
       "entity_id": "1788419349379-uhpbiiy",
@@ -1140,6 +1191,12 @@
       "name": "Dimensi Pendidikan (RLS & HLS)",
       "code": "EDU",
       "description": "Data rata-rata lama sekolah & harapan lama sekolah"
+    },
+    {
+      "id": "cat-99",
+      "name": "Uji Coba",
+      "code": "UJI",
+      "description": "Testing"
     }
   ]
 }

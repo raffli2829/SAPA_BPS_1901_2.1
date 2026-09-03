@@ -9,6 +9,7 @@ const localIps = Object.values(os.networkInterfaces())
 
 const BACKEND_URL = (
   process.env.BACKEND_INTERNAL_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
   process.env.BACKEND_URL ||
   'http://127.0.0.1:80'
 ).replace(/\/$/, '');

@@ -30,7 +30,7 @@ import {
   CATEGORIES,
 } from './mock-data';
 import { generateId, detectChangeAnomaly } from './utils';
-import { BackendApi } from './apiClient';
+import { BackendApi, getEffectiveBackendUrl } from './apiClient';
 
 // --- In-Memory Store ---
 
@@ -99,16 +99,84 @@ function notify(): void {
   listeners.forEach((l) => l());
 }
 
+// ============================================================
+// STATUS KONEKSI BACKEND DAN DATABASE REAKTIF
+// ============================================================
+
+export interface BackendConnectionState {
+  isConnected: boolean;
+  isSyncing: boolean;
+  lastSyncedAt: Date | null;
+  targetUrl: string;
+}
+
+let connectionState: BackendConnectionState = {
+  isConnected: false,
+  isSyncing: false,
+  lastSyncedAt: null,
+  targetUrl: '',
+};
+
+type ConnectionListener = (state: BackendConnectionState) => void;
+const connectionListeners: Set<ConnectionListener> = new Set();
+
+export function subscribeBackendStatus(listener: ConnectionListener): () => void {
+  connectionListeners.add(listener);
+  listener(connectionState);
+  return () => connectionListeners.delete(listener);
+}
+
+export function getBackendStatus(): BackendConnectionState {
+  return connectionState;
+}
+
+function updateBackendStatus(partial: Partial<BackendConnectionState>) {
+  connectionState = {
+    ...connectionState,
+    ...partial,
+    targetUrl: getEffectiveBackendUrl(),
+  };
+  connectionListeners.forEach((l) => l(connectionState));
+}
+
 let isSyncing = false;
 
 /**
- * Sinkronisasi data real-time dengan backend Express (Port 8000)
+ * Sinkronisasi data real-time dua arah dengan backend Express / db_store.json
  */
 export async function syncWithBackend(): Promise<void> {
   if (typeof window === 'undefined' || isSyncing) return;
   isSyncing = true;
+  updateBackendStatus({ isSyncing: true });
 
   try {
+    const currentStore = getStore();
+
+    // 1. Prioritaskan Full Snapshot Sync dua arah:
+    // Kirim data lokal saat ini (termasuk input terbaru) ke backend, dan terima database gabungan yang utuh.
+    const syncRes = await BackendApi.syncStore({
+      datasets: currentStore.datasets,
+      records: currentStore.records,
+      categories: currentStore.categories,
+      users: currentStore.users,
+      reviews: currentStore.reviews,
+      auditLogs: currentStore.auditLogs,
+    });
+
+    if (syncRes && Array.isArray(syncRes.datasets)) {
+      currentStore.datasets = syncRes.datasets;
+      if (Array.isArray(syncRes.records)) currentStore.records = syncRes.records;
+      if (Array.isArray(syncRes.categories)) currentStore.categories = syncRes.categories;
+      if (Array.isArray(syncRes.users)) currentStore.users = syncRes.users;
+      if (Array.isArray(syncRes.reviews)) currentStore.reviews = syncRes.reviews;
+      if (Array.isArray(syncRes.auditLogs)) currentStore.auditLogs = syncRes.auditLogs;
+
+      notify();
+      updateBackendStatus({ isConnected: true, isSyncing: false, lastSyncedAt: new Date() });
+      return;
+    }
+
+    // 2. Fallback REST API individual jika endpoint sync khusus belum merespons
     const [datasets, records, reviews, auditLogs, users, categories] = await Promise.all([
       BackendApi.getDatasets(),
       BackendApi.getRecords(),
@@ -118,49 +186,61 @@ export async function syncWithBackend(): Promise<void> {
       BackendApi.getCategories(),
     ]);
 
-    const s = getStore();
     let hasChanges = false;
 
     if (datasets && datasets.length > 0) {
-      s.datasets = datasets;
+      currentStore.datasets = datasets;
       hasChanges = true;
     }
     if (records && records.length > 0) {
-      s.records = records;
+      currentStore.records = records;
       hasChanges = true;
     }
     if (reviews && reviews.length > 0) {
-      s.reviews = reviews;
+      currentStore.reviews = reviews;
       hasChanges = true;
     }
     if (auditLogs && auditLogs.length > 0) {
-      s.auditLogs = auditLogs;
+      currentStore.auditLogs = auditLogs;
       hasChanges = true;
     }
     if (users && users.length > 0) {
-      s.users = users;
+      currentStore.users = users;
       hasChanges = true;
     }
     if (categories && categories.length > 0) {
-      s.categories = categories;
+      currentStore.categories = categories;
       hasChanges = true;
     }
 
     if (hasChanges) {
       notify();
     }
-  } catch {
-    // backend offline fallback to local store
+    updateBackendStatus({ isConnected: true, isSyncing: false, lastSyncedAt: new Date() });
+  } catch (err) {
+    console.warn('[Backend Sync] Menggunakan data lokal (backend offline):', err);
+    updateBackendStatus({ isConnected: false, isSyncing: false });
   } finally {
     isSyncing = false;
   }
 }
 
-// Auto sync on client initialization
+// Auto sync on client initialization & periodic background reconciliation
 if (typeof window !== 'undefined') {
+  // Sync segera begitu client browser siap
   setTimeout(() => {
     syncWithBackend();
   }, 100);
+
+  // Sync berkala setiap 25 detik agar frontend selalu mengikuti perubahan di server/WhatsApp
+  setInterval(() => {
+    syncWithBackend();
+  }, 25000);
+
+  // Sync saat pengguna kembali ke tab ini
+  window.addEventListener('focus', () => {
+    syncWithBackend();
+  });
 }
 
 // --- Reset ---
@@ -198,6 +278,7 @@ export const CategoryRepo = {
   create(data: Omit<Category, 'id'>): Category {
     const category: Category = { id: generateId(), ...data };
     getStore().categories.push(category);
+    BackendApi.createCategory(category).catch(() => {});
     notify();
     return category;
   },
@@ -899,6 +980,7 @@ export const UserRepo = {
       created_at: new Date().toISOString(),
     };
     getStore().users.push(newUser);
+    BackendApi.createUser(newUser).catch(() => {});
     notify();
     return newUser;
   },
@@ -909,6 +991,7 @@ export const UserRepo = {
     if (data.name) user.name = data.name.trim();
     if (data.email) user.email = data.email.trim();
     if (data.role) user.role = data.role;
+    BackendApi.updateUser(id, data).catch(() => {});
     notify();
     return user;
   },
@@ -917,6 +1000,7 @@ export const UserRepo = {
     const idx = getStore().users.findIndex((u) => u.id === id);
     if (idx === -1) return false;
     getStore().users.splice(idx, 1);
+    BackendApi.deleteUser(id).catch(() => {});
     notify();
     return true;
   },

@@ -156,8 +156,11 @@ export function createWebServer(): express.Express {
     }
 
     const now = new Date().toISOString();
+    const targetId = body.id || `ds-${uid()}`;
+    const existingIdx = store.datasets.findIndex(d => d.id === targetId || d.code.trim().toUpperCase() === body.code.trim().toUpperCase());
+
     const newDataset: Dataset = {
-      id: body.id || `ds-${uid()}`,
+      id: existingIdx !== -1 ? store.datasets[existingIdx].id : targetId,
       code: body.code.trim().toUpperCase(),
       name: body.name.trim(),
       category: body.category.trim(),
@@ -170,12 +173,16 @@ export function createWebServer(): express.Express {
       status: body.status || DataStatus.DRAFT,
       created_by: body.created_by || 'user-1',
       updated_by: body.updated_by || 'user-1',
-      created_at: now,
+      created_at: existingIdx !== -1 ? store.datasets[existingIdx].created_at : now,
       updated_at: now,
-      record_count: 0
+      record_count: existingIdx !== -1 ? store.datasets[existingIdx].record_count || 0 : 0
     };
 
-    store.datasets.unshift(newDataset);
+    if (existingIdx !== -1) {
+      store.datasets[existingIdx] = newDataset;
+    } else {
+      store.datasets.unshift(newDataset);
+    }
 
     // Audit log
     store.auditLogs.unshift({
@@ -183,7 +190,7 @@ export function createWebServer(): express.Express {
       entity_type: 'dataset',
       entity_id: newDataset.id,
       entity_name: newDataset.name,
-      action: AuditAction.CREATE,
+      action: existingIdx !== -1 ? AuditAction.UPDATE : AuditAction.CREATE,
       changes: [{ field: 'status', old_value: null, new_value: newDataset.status }],
       user_id: newDataset.created_by,
       user_name: store.users.find(u => u.id === newDataset.created_by)?.name || 'Admin',
@@ -191,7 +198,7 @@ export function createWebServer(): express.Express {
     });
 
     saveBackendStore(store);
-    res.status(201).json({ success: true, data: newDataset });
+    res.status(existingIdx !== -1 ? 200 : 201).json({ success: true, data: newDataset });
   });
 
   // PUT /api/datasets/:id
@@ -285,8 +292,11 @@ export function createWebServer(): express.Express {
     const body = req.body;
     const now = new Date().toISOString();
 
+    const targetId = body.id || `rec-${uid()}`;
+    const existingIdx = store.records.findIndex(r => r.id === targetId);
+
     const newRecord: DataRecord = {
-      id: body.id || `rec-${uid()}`,
+      id: targetId,
       dataset_id: body.dataset_id,
       indicator: body.indicator || '',
       region: body.region || 'Kabupaten Bangka',
@@ -298,12 +308,16 @@ export function createWebServer(): express.Express {
       status: body.status || DataStatus.DRAFT,
       created_by: body.created_by || 'user-1',
       updated_by: body.updated_by || 'user-1',
-      created_at: now,
+      created_at: existingIdx !== -1 ? store.records[existingIdx].created_at : now,
       updated_at: now,
       is_deleted: false
     };
 
-    store.records.push(newRecord);
+    if (existingIdx !== -1) {
+      store.records[existingIdx] = newRecord;
+    } else {
+      store.records.push(newRecord);
+    }
     saveBackendStore(store);
 
     // Jika langsung dipublish, sinkronkan ke FAQ CSV
@@ -314,7 +328,7 @@ export function createWebServer(): express.Express {
       }
     }
 
-    res.status(201).json({ success: true, data: newRecord });
+    res.status(existingIdx !== -1 ? 200 : 201).json({ success: true, data: newRecord });
   });
 
   // PUT /api/records/:id
@@ -616,7 +630,7 @@ export function createWebServer(): express.Express {
   });
 
   // ============================================================
-  // 4. USERS & CATEGORIES & DASHBOARD SUMMARY
+  // 4. USERS & CATEGORIES & DASHBOARD SUMMARY & STORE SYNC
   // ============================================================
 
   // GET /api/users
@@ -625,10 +639,194 @@ export function createWebServer(): express.Express {
     res.json({ success: true, data: store.users });
   });
 
+  // POST /api/users
+  app.post('/api/users', (req: Request, res: Response) => {
+    const store = loadBackendStore();
+    const body = req.body;
+    if (!body.name || !body.email) {
+      res.status(400).json({ success: false, error: 'Nama dan email pengguna wajib diisi.' });
+      return;
+    }
+    const targetId = body.id || `user-${uid()}`;
+    const existingIdx = store.users.findIndex(u => u.id === targetId || u.email.toLowerCase() === body.email.toLowerCase());
+    const newUser = {
+      id: existingIdx !== -1 ? store.users[existingIdx].id : targetId,
+      name: body.name.trim(),
+      email: body.email.trim(),
+      role: body.role || 'DATA_ENTRY',
+      created_at: existingIdx !== -1 ? store.users[existingIdx].created_at : new Date().toISOString(),
+    };
+    if (existingIdx !== -1) {
+      store.users[existingIdx] = newUser as any;
+    } else {
+      store.users.push(newUser as any);
+    }
+    saveBackendStore(store);
+    res.status(existingIdx !== -1 ? 200 : 201).json({ success: true, data: newUser });
+  });
+
+  // PUT /api/users/:id
+  app.put('/api/users/:id', (req: Request, res: Response) => {
+    const store = loadBackendStore();
+    const idx = store.users.findIndex(u => u.id === req.params.id);
+    if (idx === -1) {
+      res.status(404).json({ success: false, error: 'User tidak ditemukan.' });
+      return;
+    }
+    store.users[idx] = { ...store.users[idx], ...req.body, id: store.users[idx].id };
+    saveBackendStore(store);
+    res.json({ success: true, data: store.users[idx] });
+  });
+
+  // DELETE /api/users/:id
+  app.delete('/api/users/:id', (req: Request, res: Response) => {
+    const store = loadBackendStore();
+    const idx = store.users.findIndex(u => u.id === req.params.id);
+    if (idx === -1) {
+      res.status(404).json({ success: false, error: 'User tidak ditemukan.' });
+      return;
+    }
+    store.users.splice(idx, 1);
+    saveBackendStore(store);
+    res.json({ success: true, message: 'User berhasil dihapus.' });
+  });
+
   // GET /api/categories
   app.get('/api/categories', (req: Request, res: Response) => {
     const store = loadBackendStore();
     res.json({ success: true, data: store.categories });
+  });
+
+  // POST /api/categories
+  app.post('/api/categories', (req: Request, res: Response) => {
+    const store = loadBackendStore();
+    const body = req.body;
+    if (!body.name) {
+      res.status(400).json({ success: false, error: 'Nama kategori wajib diisi.' });
+      return;
+    }
+    const targetId = body.id || `cat-${uid()}`;
+    const existingIdx = store.categories.findIndex(c => c.id === targetId || c.name.toLowerCase() === body.name.toLowerCase());
+    const newCat = {
+      id: existingIdx !== -1 ? store.categories[existingIdx].id : targetId,
+      name: body.name.trim(),
+      code: body.code ? body.code.trim().toUpperCase() : body.name.slice(0, 4).toUpperCase(),
+      description: body.description || ''
+    };
+    if (existingIdx !== -1) {
+      store.categories[existingIdx] = newCat;
+    } else {
+      store.categories.push(newCat);
+    }
+    saveBackendStore(store);
+    res.status(existingIdx !== -1 ? 200 : 201).json({ success: true, data: newCat });
+  });
+
+  // POST /api/sync/store (Sinkronisasi snapshot database dua arah dengan frontend)
+  app.post('/api/sync/store', (req: Request, res: Response) => {
+    const store = loadBackendStore();
+    const { datasets, records, categories, users, reviews, auditLogs } = req.body;
+    let modified = false;
+
+    // Merge Categories
+    if (Array.isArray(categories)) {
+      for (const c of categories) {
+        if (!store.categories.some(sc => sc.id === c.id || sc.name.toLowerCase() === c.name.toLowerCase())) {
+          store.categories.push(c);
+          modified = true;
+        }
+      }
+    }
+
+    // Merge Users
+    if (Array.isArray(users)) {
+      for (const u of users) {
+        if (!store.users.some(su => su.id === u.id || su.email.toLowerCase() === u.email.toLowerCase())) {
+          store.users.push(u);
+          modified = true;
+        }
+      }
+    }
+
+    // Merge Datasets
+    if (Array.isArray(datasets)) {
+      for (const ds of datasets) {
+        const existingIdx = store.datasets.findIndex(sd => sd.id === ds.id || sd.code.toUpperCase() === ds.code.toUpperCase());
+        if (existingIdx === -1) {
+          store.datasets.push(ds);
+          modified = true;
+        } else {
+          // If frontend has newer updated_at
+          if (ds.updated_at && (!store.datasets[existingIdx].updated_at || new Date(ds.updated_at) > new Date(store.datasets[existingIdx].updated_at))) {
+            store.datasets[existingIdx] = { ...store.datasets[existingIdx], ...ds };
+            modified = true;
+          }
+        }
+      }
+    }
+
+    // Merge Records
+    if (Array.isArray(records)) {
+      for (const rec of records) {
+        const existingIdx = store.records.findIndex(sr => sr.id === rec.id);
+        if (existingIdx === -1) {
+          store.records.push(rec);
+          modified = true;
+        } else {
+          if (rec.updated_at && (!store.records[existingIdx].updated_at || new Date(rec.updated_at) > new Date(store.records[existingIdx].updated_at))) {
+            store.records[existingIdx] = { ...store.records[existingIdx], ...rec };
+            modified = true;
+          }
+        }
+      }
+    }
+
+    // Merge Reviews
+    if (Array.isArray(reviews)) {
+      for (const rev of reviews) {
+        if (!store.reviews.some(sr => sr.id === rev.id)) {
+          store.reviews.push(rev);
+          modified = true;
+        }
+      }
+    }
+
+    // Merge AuditLogs
+    if (Array.isArray(auditLogs)) {
+      for (const log of auditLogs) {
+        if (!store.auditLogs.some(sl => sl.id === log.id)) {
+          store.auditLogs.push(log);
+          modified = true;
+        }
+      }
+    }
+
+    if (modified) {
+      saveBackendStore(store);
+      // Sinkronkan seluruh data published ke FAQ CSV WhatsApp
+      try {
+        const publishedRecords = store.records.filter(r => r.status === DataStatus.PUBLISHED && !r.is_deleted);
+        for (const r of publishedRecords) {
+          const ds = store.datasets.find(d => d.id === r.dataset_id);
+          if (ds) {
+            syncDataToFAQ(ds.category, r.indicator, r.period, r.value ?? '-', r.unit);
+          }
+        }
+      } catch {}
+    }
+
+    res.json({
+      success: true,
+      message: 'Database backend berhasil disinkronkan.',
+      data: {
+        datasets: store.datasets,
+        records: store.records.filter(r => !r.is_deleted),
+        categories: store.categories,
+        users: store.users,
+        reviews: store.reviews,
+        auditLogs: store.auditLogs,
+      }
+    });
   });
 
   // GET /api/dashboard/summary

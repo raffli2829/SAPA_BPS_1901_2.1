@@ -13,12 +13,8 @@ import {
 } from './types';
 
 // ============================================================
-// Konfigurasi Terpusat Base URL Backend WhatsApp
+// Konfigurasi Terpusat Base URL Backend WhatsApp & REST API
 // ============================================================
-// 1. Pada lingkungan lokal (localhost / 127.0.0.1 / IP LAN):
-//    Gunakan URL relatif '' agar request diproxy oleh Next.js server tanpa hambatan CORS / interstitial ngrok.
-// 2. Pada hosting publik (Vercel / Netlify / custom domain):
-//    Gunakan NEXT_PUBLIC_BACKEND_URL (https://footless-aptitude-caloric.ngrok-free.dev).
 const isClient = typeof window !== 'undefined';
 const isLocalOrigin = isClient && (
   window.location.hostname === 'localhost' ||
@@ -28,12 +24,23 @@ const isLocalOrigin = isClient && (
   window.location.hostname.startsWith('172.')
 );
 
+const PUBLIC_BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || '').replace(/\/$/, '');
+const LOCAL_BACKEND_URL = (process.env.BACKEND_URL || 'http://localhost:80').replace(/\/$/, '');
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
+
+// Target primer: URL relatif untuk Next.js server rewrite jika di lingkungan lokal,
+// atau PUBLIC_BACKEND_URL jika di hosting publik luar.
 const RAW_BACKEND_URL = isLocalOrigin
   ? ''
-  : (process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || (isClient ? '' : (process.env.BACKEND_INTERNAL_URL || 'http://localhost:80')));
+  : (PUBLIC_BACKEND_URL || LOCAL_BACKEND_URL || (isClient ? '' : (process.env.BACKEND_INTERNAL_URL || 'http://localhost:80')));
 
 const BASE_URL = RAW_BACKEND_URL ? RAW_BACKEND_URL.replace(/\/$/, '') : '';
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
+
+export function getEffectiveBackendUrl(): string {
+  if (!isClient) return LOCAL_BACKEND_URL || 'http://localhost:80';
+  if (isLocalOrigin) return window.location.origin + ' (Port 80 Proxy)';
+  return PUBLIC_BACKEND_URL || window.location.origin;
+}
 
 async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
   const headers: Record<string, string> = {
@@ -59,12 +66,23 @@ async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | nul
       return json?.data !== undefined ? json.data : json;
     }
 
-    // Jika proxy gagal (misal 500) saat di lingkungan lokal, coba tembak langsung port 80 backend
-    if (isLocalOrigin && !fullUrl.startsWith('http://127.0.0.1:80') && !fullUrl.startsWith('http://localhost:80')) {
+    // Fallback tier 1: Jika proxy lokal mengembalikan error atau 502/500, coba tembak langsung port 80 backend
+    if (isLocalOrigin && !fullUrl.startsWith(LOCAL_BACKEND_URL)) {
       try {
-        const directRes = await fetch(`http://127.0.0.1:80${path}`, { ...options, headers });
+        const directRes = await fetch(`${LOCAL_BACKEND_URL}${path}`, { ...options, headers });
         if (directRes.ok) {
           const json = await directRes.json();
+          return json?.data !== undefined ? json.data : json;
+        }
+      } catch {}
+    }
+
+    // Fallback tier 2: Jika public ngrok URL tersedia dan berbeda dari fullUrl
+    if (PUBLIC_BACKEND_URL && !fullUrl.startsWith(PUBLIC_BACKEND_URL)) {
+      try {
+        const ngrokRes = await fetch(`${PUBLIC_BACKEND_URL}${path}`, { ...options, headers });
+        if (ngrokRes.ok) {
+          const json = await ngrokRes.json();
           return json?.data !== undefined ? json.data : json;
         }
       } catch {}
@@ -73,12 +91,21 @@ async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | nul
     console.warn(`[API] HTTP ${res.status} pada ${fullUrl}`);
     return null;
   } catch (err) {
-    // Fallback jika fetch network error di local origin
-    if (isLocalOrigin && !fullUrl.startsWith('http://127.0.0.1:80') && !fullUrl.startsWith('http://localhost:80')) {
+    // Fallback saat fetch network error
+    if (isLocalOrigin && !fullUrl.startsWith(LOCAL_BACKEND_URL)) {
       try {
-        const directRes = await fetch(`http://127.0.0.1:80${path}`, { ...options, headers });
+        const directRes = await fetch(`${LOCAL_BACKEND_URL}${path}`, { ...options, headers });
         if (directRes.ok) {
           const json = await directRes.json();
+          return json?.data !== undefined ? json.data : json;
+        }
+      } catch {}
+    }
+    if (PUBLIC_BACKEND_URL && !fullUrl.startsWith(PUBLIC_BACKEND_URL)) {
+      try {
+        const ngrokRes = await fetch(`${PUBLIC_BACKEND_URL}${path}`, { ...options, headers });
+        if (ngrokRes.ok) {
+          const json = await ngrokRes.json();
           return json?.data !== undefined ? json.data : json;
         }
       } catch {}
@@ -202,8 +229,64 @@ export const BackendApi = {
     return safeFetch<User[]>(`${BASE_URL}/api/backend/users`);
   },
 
+  async createUser(user: Partial<User>): Promise<User | null> {
+    return safeFetch<User>(`${BASE_URL}/api/backend/users`, {
+      method: 'POST',
+      body: JSON.stringify(user),
+    });
+  },
+
+  async updateUser(id: string, user: Partial<User>): Promise<User | null> {
+    return safeFetch<User>(`${BASE_URL}/api/backend/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(user),
+    });
+  },
+
+  async deleteUser(id: string): Promise<boolean> {
+    const res = await safeFetch<{ success: boolean }>(`${BASE_URL}/api/backend/users/${id}`, {
+      method: 'DELETE',
+    });
+    return !!res?.success;
+  },
+
   async getCategories(): Promise<Category[] | null> {
     return safeFetch<Category[]>(`${BASE_URL}/api/backend/categories`);
+  },
+
+  async createCategory(category: Partial<Category>): Promise<Category | null> {
+    return safeFetch<Category>(`${BASE_URL}/api/backend/categories`, {
+      method: 'POST',
+      body: JSON.stringify(category),
+    });
+  },
+
+  async syncStore(snapshot: {
+    datasets?: Dataset[];
+    records?: DataRecord[];
+    categories?: Category[];
+    users?: User[];
+    reviews?: ReviewRequest[];
+    auditLogs?: AuditLog[];
+  }): Promise<{
+    datasets: Dataset[];
+    records: DataRecord[];
+    categories: Category[];
+    users: User[];
+    reviews: ReviewRequest[];
+    auditLogs: AuditLog[];
+  } | null> {
+    return safeFetch<{
+      datasets: Dataset[];
+      records: DataRecord[];
+      categories: Category[];
+      users: User[];
+      reviews: ReviewRequest[];
+      auditLogs: AuditLog[];
+    }>(`${BASE_URL}/api/backend/sync/store`, {
+      method: 'POST',
+      body: JSON.stringify(snapshot),
+    });
   },
 
   async getDashboardSummary(): Promise<DashboardSummary | null> {
