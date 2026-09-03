@@ -710,7 +710,25 @@ export function createWebServer(): express.Express {
   });
 
   // ============================================================
-  // 7. WEB ADMIN UNIFIED REDIRECT / ENTRY
+  // 7. BOT WHATSAPP STATUS & RESET API
+  // ============================================================
+
+  app.get('/api/bot/status', (req: Request, res: Response) => {
+    const status = getBotStatus();
+    res.json(status);
+  });
+
+  app.post('/api/bot/reset', async (req: Request, res: Response) => {
+    try {
+      await resetWhatsAppAuth();
+      res.json({ status: 'success', message: 'Sesi WhatsApp berhasil direset. QR code baru sedang dibuat...' });
+    } catch (err) {
+      res.status(500).json({ status: 'error', message: 'Gagal mereset sesi WhatsApp' });
+    }
+  });
+
+  // ============================================================
+  // 8. WEB ADMIN UNIFIED REDIRECT / ENTRY
   // ============================================================
 
   // Redirect / dan /admin ke frontend Next.js di port 3000
