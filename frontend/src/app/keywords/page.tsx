@@ -527,28 +527,25 @@ export default function KeywordsPage() {
                     />
                   </div>
 
-                  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, maxWidth: '100%' }}>
-                    {categories.map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setSelectedCategory(cat)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: 999,
-                          fontSize: 12,
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap',
-                          border: selectedCategory === cat ? '1px solid var(--primary-600)' : '1px solid var(--slate-200)',
-                          background: selectedCategory === cat ? 'var(--primary-600)' : '#ffffff',
-                          color: selectedCategory === cat ? '#ffffff' : 'var(--slate-600)',
-                          transition: 'all 150ms',
-                        }}
-                      >
-                        {cat === 'ALL' ? 'Semua Topik' : cat}
-                      </button>
-                    ))}
+                  <div className="select-wrapper" style={{ minWidth: 200 }}>
+                    <select
+                      className="select-input"
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      style={{ height: 38, fontSize: 13 }}
+                    >
+                      <option value="ALL">Semua Topik ({templates.length})</option>
+                      {categories
+                        .filter((cat) => cat !== 'ALL')
+                        .map((cat) => {
+                          const count = templates.filter((t) => t.category === cat).length;
+                          return (
+                            <option key={cat} value={cat}>
+                              {cat} ({count})
+                            </option>
+                          );
+                        })}
+                    </select>
                   </div>
                 </div>
 
