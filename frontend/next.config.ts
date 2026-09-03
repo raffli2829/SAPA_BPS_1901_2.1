@@ -1,8 +1,26 @@
 import type { NextConfig } from "next";
+import os from "os";
+
+// Ambil semua IPv4 lokal aktif di komputer (Wi-Fi, Ethernet, Hotspot, Tailscale)
+const localIps = Object.values(os.networkInterfaces())
+  .flat()
+  .filter((iface): iface is os.NetworkInterfaceInfo => Boolean(iface && iface.family === 'IPv4' && !iface.internal))
+  .map((iface) => iface.address);
 
 const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:8000';
 
 const nextConfig: NextConfig = {
+  // Izinkan akses dari IP lokal jaringan Wi-Fi agar tidak diblokir cross-origin oleh Next.js
+  allowedDevOrigins: [
+    'localhost',
+    'localhost:3000',
+    '127.0.0.1',
+    '127.0.0.1:3000',
+    '192.168.1.41',
+    '192.168.1.41:3000',
+    ...localIps,
+    ...localIps.map((ip) => `${ip}:3000`),
+  ],
   async rewrites() {
     return [
       {
