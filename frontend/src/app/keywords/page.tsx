@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
 import Header from '@/components/layout/Header';
@@ -19,12 +20,15 @@ import {
   Smartphone,
   Bot,
   Search,
-  Check,
   CheckCheck,
   RefreshCw,
-  ExternalLink,
-  HelpCircle,
   Hash,
+  Lock,
+  Eye,
+  ExternalLink,
+  Layers,
+  FileSpreadsheet,
+  HelpCircle,
 } from 'lucide-react';
 
 export default function KeywordsPage() {
@@ -40,10 +44,11 @@ export default function KeywordsPage() {
   });
 
   const [search, setSearch] = useState('');
+  const [selectedSource, setSelectedSource] = useState<'ALL' | 'DATASET' | 'MANUAL'>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
-  // Modal State
+  // Modal Add / Edit Template
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ChatbotTemplate | null>(null);
   const [formKeyword, setFormKeyword] = useState('');
@@ -51,11 +56,14 @@ export default function KeywordsPage() {
   const [formCategory, setFormCategory] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Modal Preview (Read-Only)
+  const [previewTemplate, setPreviewTemplate] = useState<ChatbotTemplate | null>(null);
+
   // WhatsApp Simulator State
   const [simMessages, setSimMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string; time: string }>>([
     {
       sender: 'bot',
-      text: 'Halo! Selamat datang di layanan *SAPA BPS Kab. Bangka* 😊\n\nSilakan ketik kata kunci statistik (misal: *kemiskinan*, *ipm*, *penduduk*, atau *menu*) untuk melihat data resmi.',
+      text: 'Halo! Selamat datang di layanan *SAPA BPS Kab. Bangka* 😊\n\nKetik kata kunci data statistik (contoh: *penduduk*, *kemiskinan*, *ipm*, atau *menu*) untuk melihat template balasan otomatis.',
       time: '08:00',
     },
   ]);
@@ -76,7 +84,7 @@ export default function KeywordsPage() {
       setTemplates(ChatbotTemplateRepo.getAll());
     }
 
-    // Try background sync with backend FAQs
+    // Background sync with backend FAQs
     ChatbotTemplateRepo.syncWithBackendFaqs().then(() => {
       setTemplates(ChatbotTemplateRepo.getAll());
     });
@@ -95,19 +103,32 @@ export default function KeywordsPage() {
     return ['ALL', ...Array.from(set)];
   }, [templates]);
 
+  // Metrics count
+  const datasetCount = useMemo(() => templates.filter((t) => t.source_type === 'DATASET').length, [templates]);
+  const manualCount = useMemo(() => templates.filter((t) => t.source_type === 'MANUAL').length, [templates]);
+
   // Filtered templates
   const filteredTemplates = useMemo(() => {
     return templates.filter((t) => {
       const matchSearch =
         t.keyword.toLowerCase().includes(search.toLowerCase()) ||
         t.response.toLowerCase().includes(search.toLowerCase());
+      const matchSource =
+        selectedSource === 'ALL' ||
+        (selectedSource === 'DATASET' && t.source_type === 'DATASET') ||
+        (selectedSource === 'MANUAL' && t.source_type === 'MANUAL');
       const matchCat = selectedCategory === 'ALL' || t.category === selectedCategory;
-      return matchSearch && matchCat;
+      return matchSearch && matchSource && matchCat;
     });
-  }, [templates, search, selectedCategory]);
+  }, [templates, search, selectedSource, selectedCategory]);
 
   const handleOpenModal = (tpl?: ChatbotTemplate) => {
     if (tpl) {
+      if (tpl.source_type === 'DATASET') {
+        // Dataset template is read-only, open preview instead
+        setPreviewTemplate(tpl);
+        return;
+      }
       setEditingTemplate(tpl);
       setFormKeyword(tpl.keyword);
       setFormResponse(tpl.response);
@@ -116,7 +137,7 @@ export default function KeywordsPage() {
       setEditingTemplate(null);
       setFormKeyword('');
       setFormResponse('');
-      setFormCategory('Data Statistik');
+      setFormCategory('Informasi Umum');
     }
     setIsModalOpen(true);
   };
@@ -124,7 +145,7 @@ export default function KeywordsPage() {
   const handleSaveTemplate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formKeyword.trim() || !formResponse.trim()) {
-      setToast({ msg: 'Kata kunci dan balasan template wajib diisi.', type: 'error' });
+      setToast({ msg: 'Kata kunci dan isi template pesan balasan wajib diisi.', type: 'error' });
       return;
     }
 
@@ -143,7 +164,7 @@ export default function KeywordsPage() {
           response: formResponse.trim(),
           category: formCategory.trim() || 'Umum',
         });
-        setToast({ msg: 'Kata kunci baru berhasil ditambahkan ke chatbot.', type: 'success' });
+        setToast({ msg: 'Kata kunci baru berhasil didaftarkan ke chatbot WhatsApp.', type: 'success' });
       }
       setIsModalOpen(false);
       setTemplates(ChatbotTemplateRepo.getAll());
@@ -154,11 +175,15 @@ export default function KeywordsPage() {
     }
   };
 
-  const handleDeleteTemplate = (id: string, keyword: string) => {
-    if (confirm(`Hapus template kata kunci "${keyword}" dari bot WhatsApp?`)) {
-      ChatbotTemplateRepo.delete(id);
+  const handleDeleteTemplate = (tpl: ChatbotTemplate) => {
+    if (tpl.source_type === 'DATASET') {
+      alert('Template yang berasal dari dataset resmi bersifat otomatis dan tidak dapat dihapus.');
+      return;
+    }
+    if (confirm(`Hapus template kata kunci "${tpl.keyword}" dari bot WhatsApp?`)) {
+      ChatbotTemplateRepo.delete(tpl.id);
       setTemplates(ChatbotTemplateRepo.getAll());
-      setToast({ msg: `Kata kunci "${keyword}" berhasil dihapus.`, type: 'success' });
+      setToast({ msg: `Kata kunci "${tpl.keyword}" berhasil dihapus.`, type: 'success' });
     }
   };
 
@@ -181,7 +206,9 @@ export default function KeywordsPage() {
       let matched = templates.find((t) => t.keyword.toLowerCase() === clean);
 
       if (!matched) {
-        matched = templates.find((t) => clean.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(clean));
+        matched = templates.find(
+          (t) => clean.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(clean)
+        );
       }
 
       let reply = '';
@@ -192,7 +219,7 @@ export default function KeywordsPage() {
           `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
           `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
           `1️⃣ *Jumlah Penduduk*\n2️⃣ *Data Kemiskinan*\n3️⃣ *Pertumbuhan Ekonomi*\n4️⃣ *Indeks Pembangunan Manusia (IPM)*\n5️⃣ *Tenaga Kerja*\n6️⃣ *Produk Domestik Regional Bruto (PDRB)*\n🔟 *Hubungi Petugas PST BPS*\n\n` +
-          `💡 _Balas dengan angka atau ketik pertanyaan langsung._`;
+          `💡 _Balas dengan angka atau ketik kata kunci pertanyaan langsung._`;
       } else {
         reply =
           `Mohon maaf, kata kunci *"${text}"* belum terdaftar dalam template cepat kami.\n\n` +
@@ -204,17 +231,13 @@ export default function KeywordsPage() {
     }, 450);
   };
 
-  const handleTestInSimulator = (keyword: string) => {
-    handleSimSend(keyword);
-  };
-
   if (isLoading || !isAuthenticated) return null;
 
   return (
     <AppLayout>
       <Header
-        title="Template Chatbot WhatsApp"
-        subtitle="Kelola kata kunci & respons otomatis asisten virtual SAPA BPS Kab. Bangka"
+        title="Template Chatbot & Kata Kunci"
+        subtitle="Kelola kata kunci pemicu serta respons otomatis bot WhatsApp SAPA BPS"
         actions={
           <Button
             variant="primary"
@@ -222,17 +245,17 @@ export default function KeywordsPage() {
             icon={<Plus size={14} />}
             onClick={() => handleOpenModal()}
           >
-            Tambah Kata Kunci
+            Tambah Kata Kunci Manual
           </Button>
         }
       />
 
-      <div className="page-content" style={{ maxWidth: 1280 }}>
+      <div className="page-content" style={{ maxWidth: 1320 }}>
         {/* Top Metric Cards */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
             gap: 16,
             marginBottom: 24,
           }}
@@ -241,7 +264,7 @@ export default function KeywordsPage() {
             style={{
               background: '#ffffff',
               border: '1px solid var(--slate-200)',
-              borderRadius: 'var(--radius-lg)',
+              borderRadius: 'var(--radius-xl)',
               padding: '18px 20px',
               display: 'flex',
               alignItems: 'center',
@@ -251,17 +274,17 @@ export default function KeywordsPage() {
           >
             <div>
               <p style={{ fontSize: 12.5, color: 'var(--slate-500)', margin: 0, fontWeight: 500 }}>
-                Total Template Chatbot
+                Total Template Aktif
               </p>
               <h3 style={{ fontSize: 24, fontWeight: 700, margin: '4px 0 0', color: 'var(--slate-900)' }}>
-                {templates.length}
+                {templates.length} Keyword
               </h3>
             </div>
             <div
               style={{
-                width: 42,
-                height: 42,
-                borderRadius: 'var(--radius-md)',
+                width: 44,
+                height: 44,
+                borderRadius: 'var(--radius-lg)',
                 background: 'var(--primary-50)',
                 color: 'var(--primary-600)',
                 display: 'flex',
@@ -277,7 +300,7 @@ export default function KeywordsPage() {
             style={{
               background: '#ffffff',
               border: '1px solid var(--slate-200)',
-              borderRadius: 'var(--radius-lg)',
+              borderRadius: 'var(--radius-xl)',
               padding: '18px 20px',
               display: 'flex',
               alignItems: 'center',
@@ -287,7 +310,84 @@ export default function KeywordsPage() {
           >
             <div>
               <p style={{ fontSize: 12.5, color: 'var(--slate-500)', margin: 0, fontWeight: 500 }}>
-                Status Bot WhatsApp
+                Dari Dataset Resmi BPS
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <h3 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0369a1' }}>
+                  {datasetCount} Template
+                </h3>
+                <span style={{ fontSize: 11, background: '#e0f2fe', color: '#0369a1', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>
+                  Preview Only
+                </span>
+              </div>
+            </div>
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 'var(--radius-lg)',
+                background: '#f0f9ff',
+                color: '#0284c7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <FileSpreadsheet size={20} />
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px solid var(--slate-200)',
+              borderRadius: 'var(--radius-xl)',
+              padding: '18px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: 'var(--shadow-subtle)',
+            }}
+          >
+            <div>
+              <p style={{ fontSize: 12.5, color: 'var(--slate-500)', margin: 0, fontWeight: 500 }}>
+                Template Kustom / Manual
+              </p>
+              <h3 style={{ fontSize: 24, fontWeight: 700, margin: '4px 0 0', color: 'var(--slate-900)' }}>
+                {manualCount} Template
+              </h3>
+            </div>
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 'var(--radius-lg)',
+                background: '#f8fafc',
+                color: '#475569',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Edit2 size={18} />
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px solid var(--slate-200)',
+              borderRadius: 'var(--radius-xl)',
+              padding: '18px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: 'var(--shadow-subtle)',
+            }}
+          >
+            <div>
+              <p style={{ fontSize: 12.5, color: 'var(--slate-500)', margin: 0, fontWeight: 500 }}>
+                Status WhatsApp Bot
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <span
@@ -299,16 +399,16 @@ export default function KeywordsPage() {
                     display: 'inline-block',
                   }}
                 />
-                <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: 'var(--slate-900)' }}>
-                  {botStatus.state === 'connected' ? 'Aktif & Siap Membalas' : 'Standby / QR Siap'}
+                <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: 'var(--slate-900)' }}>
+                  {botStatus.state === 'connected' ? 'Aktif Terhubung' : 'Standby / QR'}
                 </h3>
               </div>
             </div>
             <div
               style={{
-                width: 42,
-                height: 42,
-                borderRadius: 'var(--radius-md)',
+                width: 44,
+                height: 44,
+                borderRadius: 'var(--radius-lg)',
                 background: '#ecfdf5',
                 color: '#059669',
                 display: 'flex',
@@ -319,49 +419,13 @@ export default function KeywordsPage() {
               <Bot size={20} />
             </div>
           </div>
-
-          <div
-            style={{
-              background: '#ffffff',
-              border: '1px solid var(--slate-200)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '18px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              boxShadow: 'var(--shadow-subtle)',
-            }}
-          >
-            <div>
-              <p style={{ fontSize: 12.5, color: 'var(--slate-500)', margin: 0, fontWeight: 500 }}>
-                Sinkronisasi CSV Bot
-              </p>
-              <h3 style={{ fontSize: 16, fontWeight: 600, margin: '4px 0 0', color: 'var(--slate-900)' }}>
-                data_faq.csv (Live)
-              </h3>
-            </div>
-            <div
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 'var(--radius-md)',
-                background: '#f1f5f9',
-                color: '#475569',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <CheckCheck size={20} />
-            </div>
-          </div>
         </div>
 
-        {/* 2 Columns: Template Management & Interactive Simulator */}
+        {/* 2 Columns: Template List & Live WhatsApp Simulator */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1.4fr) minmax(340px, 1fr)',
+            gridTemplateColumns: 'minmax(0, 1.45fr) minmax(350px, 1fr)',
             gap: 24,
             alignItems: 'start',
           }}
@@ -377,15 +441,78 @@ export default function KeywordsPage() {
                     Daftar Kata Kunci & Template Balasan
                   </h2>
                   <p className="section-subtitle">
-                    Pesan di bawah akan otomatis terkirim saat pengguna WhatsApp mengetik kata kunci terkait
+                    Kategorisasi keyword pemicu chat. Template dari dataset resmi terlindungi dan dapat di-preview.
                   </p>
                 </div>
               </div>
 
               <div className="section-body">
-                {/* Search & Category Filter */}
+                {/* Source Filter Tabs: All, Dataset (Read-Only), Manual */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSource('ALL')}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: selectedSource === 'ALL' ? '1px solid var(--primary-600)' : '1px solid var(--slate-200)',
+                      background: selectedSource === 'ALL' ? 'var(--primary-50)' : '#ffffff',
+                      color: selectedSource === 'ALL' ? 'var(--primary-700)' : 'var(--slate-600)',
+                      transition: 'all 150ms',
+                    }}
+                  >
+                    Semua ({templates.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSource('DATASET')}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      border: selectedSource === 'DATASET' ? '1px solid #0284c7' : '1px solid var(--slate-200)',
+                      background: selectedSource === 'DATASET' ? '#f0f9ff' : '#ffffff',
+                      color: selectedSource === 'DATASET' ? '#0369a1' : 'var(--slate-600)',
+                      transition: 'all 150ms',
+                    }}
+                  >
+                    <Lock size={12} /> Dari Dataset Resmi ({datasetCount})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSource('MANUAL')}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      border: selectedSource === 'MANUAL' ? '1px solid #475569' : '1px solid var(--slate-200)',
+                      background: selectedSource === 'MANUAL' ? '#f1f5f9' : '#ffffff',
+                      color: selectedSource === 'MANUAL' ? '#0f172a' : 'var(--slate-600)',
+                      transition: 'all 150ms',
+                    }}
+                  >
+                    <Edit2 size={12} /> Template Manual ({manualCount})
+                  </button>
+                </div>
+
+                {/* Search Bar & Category Filter */}
                 <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-                  <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
                     <Search
                       size={15}
                       style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--slate-400)' }}
@@ -393,7 +520,7 @@ export default function KeywordsPage() {
                     <input
                       type="text"
                       className="text-input"
-                      placeholder="Cari kata kunci atau isi pesan balasan..."
+                      placeholder="Cari kata kunci atau isi template chat..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       style={{ paddingLeft: 36, height: 38, fontSize: 13 }}
@@ -419,144 +546,241 @@ export default function KeywordsPage() {
                           transition: 'all 150ms',
                         }}
                       >
-                        {cat === 'ALL' ? 'Semua Kategori' : cat}
+                        {cat === 'ALL' ? 'Semua Topik' : cat}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Templates List Cards */}
+                {/* Templates List */}
                 {filteredTemplates.length === 0 ? (
                   <EmptyState
                     title="Tidak Ada Template Chatbot"
-                    description={search ? `Tidak ada kata kunci yang cocok dengan "${search}".` : 'Belum ada template yang terdaftar.'}
-                    action={
+                    description={search ? `Tidak ada template yang cocok dengan "${search}".` : 'Belum ada kata kunci pada filter ini.'}
+                    actions={
                       <Button variant="primary" size="sm" onClick={() => handleOpenModal()}>
-                        Tambah Template Sekarang
+                        Tambah Template Manual
                       </Button>
                     }
                   />
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {filteredTemplates.map((tpl) => (
-                      <div
-                        key={tpl.id}
-                        style={{
-                          background: '#ffffff',
-                          border: '1px solid var(--slate-200)',
-                          borderRadius: 'var(--radius-lg)',
-                          padding: '16px 18px',
-                          boxShadow: 'var(--shadow-subtle)',
-                          transition: 'border-color 150ms, box-shadow 150ms',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                              <span
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {filteredTemplates.map((tpl) => {
+                      const isFromDataset = tpl.source_type === 'DATASET';
+
+                      return (
+                        <div
+                          key={tpl.id}
+                          style={{
+                            background: '#ffffff',
+                            border: isFromDataset ? '1.5px solid #bae6fd' : '1px solid var(--slate-200)',
+                            borderRadius: 'var(--radius-xl)',
+                            padding: '18px 20px',
+                            boxShadow: 'var(--shadow-subtle)',
+                            transition: 'border-color 150ms, box-shadow 150ms',
+                          }}
+                        >
+                          {/* Header of each Card */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span
+                                  style={{
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color: 'var(--slate-900)',
+                                    background: isFromDataset ? '#f0f9ff' : 'var(--slate-100)',
+                                    padding: '3px 10px',
+                                    borderRadius: 'var(--radius-md)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                  }}
+                                >
+                                  💬 &quot;{tpl.keyword}&quot;
+                                </span>
+
+                                {/* Source Badge */}
+                                {isFromDataset ? (
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: '#0369a1',
+                                      background: '#e0f2fe',
+                                      border: '1px solid #7dd3fc',
+                                      padding: '2px 8px',
+                                      borderRadius: 999,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                    }}
+                                  >
+                                    <Lock size={11} /> Dari Dataset Resmi (Hanya Preview)
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: '#475569',
+                                      background: '#f1f5f9',
+                                      padding: '2px 8px',
+                                      borderRadius: 999,
+                                    }}
+                                  >
+                                    ✏️ Template Manual
+                                  </span>
+                                )}
+
+                                {tpl.category && (
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 500,
+                                      color: 'var(--slate-600)',
+                                      background: 'var(--slate-50)',
+                                      padding: '2px 8px',
+                                      borderRadius: 999,
+                                      border: '1px solid var(--slate-200)',
+                                    }}
+                                  >
+                                    {tpl.category}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                              <button
+                                type="button"
+                                onClick={() => handleSimSend(tpl.keyword)}
+                                title="Uji coba balasan di Simulator"
                                 style={{
-                                  fontSize: 13.5,
-                                  fontWeight: 700,
-                                  color: 'var(--slate-900)',
-                                  background: 'var(--slate-100)',
-                                  padding: '2px 8px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  display: 'inline-flex',
+                                  padding: '5px 10px',
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  color: 'var(--primary-700)',
+                                  background: 'var(--primary-50)',
+                                  border: '1px solid var(--primary-200)',
+                                  borderRadius: 'var(--radius-md)',
+                                  cursor: 'pointer',
+                                  display: 'flex',
                                   alignItems: 'center',
                                   gap: 4,
                                 }}
                               >
-                                💬 &quot;{tpl.keyword}&quot;
-                              </span>
-                              {tpl.category && (
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 500,
-                                    color: 'var(--primary-700)',
-                                    background: 'var(--primary-50)',
-                                    padding: '2px 8px',
-                                    borderRadius: 999,
-                                    border: '1px solid var(--primary-100)',
-                                  }}
-                                >
-                                  {tpl.category}
-                                </span>
+                                <Sparkles size={13} /> Coba di Simulator
+                              </button>
+
+                              {isFromDataset ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewTemplate(tpl)}
+                                    title="Lihat Preview Lengkap"
+                                    style={{
+                                      padding: '5px 10px',
+                                      fontSize: 11.5,
+                                      fontWeight: 600,
+                                      color: '#0369a1',
+                                      background: '#f0f9ff',
+                                      border: '1px solid #bae6fd',
+                                      borderRadius: 'var(--radius-md)',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                    }}
+                                  >
+                                    <Eye size={13} /> Preview
+                                  </button>
+                                  {tpl.dataset_id && (
+                                    <Link href={`/datasets/${tpl.dataset_id}`}>
+                                      <button
+                                        type="button"
+                                        title="Buka Halaman Dataset Asli"
+                                        style={{
+                                          padding: '5px 8px',
+                                          color: 'var(--slate-600)',
+                                          background: 'transparent',
+                                          border: 'none',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                        }}
+                                      >
+                                        <ExternalLink size={14} />
+                                      </button>
+                                    </Link>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenModal(tpl)}
+                                    style={{
+                                      padding: '5px 8px',
+                                      color: 'var(--slate-600)',
+                                      background: 'transparent',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                    }}
+                                    title="Edit Template Manual"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteTemplate(tpl)}
+                                    style={{
+                                      padding: '5px 8px',
+                                      color: 'var(--error-text)',
+                                      background: 'transparent',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                    }}
+                                    title="Hapus Template"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
                               )}
                             </div>
                           </div>
 
-                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                            <button
-                              type="button"
-                              onClick={() => handleTestInSimulator(tpl.keyword)}
-                              title="Uji coba balasan di Simulator"
-                              style={{
-                                padding: '4px 8px',
-                                fontSize: 11,
-                                fontWeight: 600,
-                                color: 'var(--primary-700)',
-                                background: 'var(--primary-50)',
-                                border: '1px solid var(--primary-200)',
-                                borderRadius: 'var(--radius-md)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 4,
-                              }}
-                            >
-                              <Sparkles size={12} /> Coba di Simulator
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenModal(tpl)}
-                              style={{
-                                padding: '4px 6px',
-                                color: 'var(--slate-600)',
-                                background: 'transparent',
-                                border: 'none',
-                                cursor: 'pointer',
-                              }}
-                              title="Edit Template"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTemplate(tpl.id, tpl.keyword)}
-                              style={{
-                                padding: '4px 6px',
-                                color: 'var(--error-text)',
-                                background: 'transparent',
-                                border: 'none',
-                                cursor: 'pointer',
-                              }}
-                              title="Hapus Template"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                          {/* Message Content Preview Box */}
+                          <div
+                            style={{
+                              background: isFromDataset ? '#f8fafc' : '#fcfcfd',
+                              border: '1px solid var(--slate-150)',
+                              borderRadius: 'var(--radius-lg)',
+                              padding: '12px 16px',
+                              fontSize: 12.5,
+                              color: 'var(--slate-700)',
+                              whiteSpace: 'pre-wrap',
+                              maxHeight: 120,
+                              overflowY: 'auto',
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {tpl.response}
+                          </div>
+
+                          {/* Footer Info */}
+                          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, color: 'var(--slate-400)' }}>
+                            <span>
+                              {isFromDataset
+                                ? '🔒 Template otomatis tersinkronisasi dari pangkalan data BPS.'
+                                : '✏️ Template kustom buatan operator.'}
+                            </span>
+                            <span>{tpl.updated_at ? `Diperbarui: ${tpl.updated_at.slice(0, 10)}` : ''}</span>
                           </div>
                         </div>
-
-                        {/* Message Preview Box */}
-                        <div
-                          style={{
-                            background: '#f8fafc',
-                            border: '1px solid var(--slate-150)',
-                            borderRadius: 'var(--radius-md)',
-                            padding: '10px 14px',
-                            fontSize: 12.5,
-                            color: 'var(--slate-700)',
-                            whiteSpace: 'pre-wrap',
-                            maxHeight: 120,
-                            overflowY: 'auto',
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          {tpl.response}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -574,7 +798,7 @@ export default function KeywordsPage() {
                 boxShadow: 'var(--shadow-md)',
                 display: 'flex',
                 flexDirection: 'column',
-                height: 600,
+                height: 620,
               }}
             >
               {/* WhatsApp Simulator Header */}
@@ -616,7 +840,7 @@ export default function KeywordsPage() {
                     setSimMessages([
                       {
                         sender: 'bot',
-                        text: 'Halo! Selamat datang di layanan *SAPA BPS Kab. Bangka* 😊\n\nKetik kata kunci (misal: *kemiskinan*, *ipm*, *penduduk*, atau *menu*) untuk mencoba balasan.',
+                        text: 'Halo! Selamat datang di layanan *SAPA BPS Kab. Bangka* 😊\n\nKetik kata kunci data statistik (contoh: *penduduk*, *kemiskinan*, *ipm*, atau *menu*) untuk mencoba balasan.',
                         time: '08:00',
                       },
                     ])
@@ -628,7 +852,7 @@ export default function KeywordsPage() {
                 </button>
               </div>
 
-              {/* Chat Body (WhatsApp Background look) */}
+              {/* Chat Body (WhatsApp look) */}
               <div
                 style={{
                   flex: 1,
@@ -651,7 +875,7 @@ export default function KeywordsPage() {
                       boxShadow: '0 1px 1px rgba(0,0,0,0.05)',
                     }}
                   >
-                    Simulator Chatbot WhatsApp BPS
+                    Simulator Chatbot WhatsApp SAPA BPS
                   </span>
                 </div>
 
@@ -760,7 +984,7 @@ export default function KeywordsPage() {
         </div>
       </div>
 
-      {/* Modal Add / Edit Template */}
+      {/* Modal Add / Edit Template (MANUAL ONLY) */}
       {isModalOpen && (
         <div
           style={{
@@ -795,7 +1019,7 @@ export default function KeywordsPage() {
                   {editingTemplate ? 'Edit Template Chatbot' : 'Tambah Kata Kunci & Template Balasan'}
                 </h3>
                 <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--slate-500)' }}>
-                  Pesan balasan akan otomatis terformat rapi di WhatsApp pengguna
+                  Template kustom buatan operator yang dapat disesuaikan isinya
                 </p>
               </div>
               <button
@@ -811,18 +1035,19 @@ export default function KeywordsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
                   <label className="input-label" htmlFor="kw">
-                    Kata Kunci Pertanyaan (Trigger)<span className="input-required">*</span>
+                    Kata Kunci Pemicu (Trigger Keyword)<span className="input-required">*</span>
                   </label>
                   <input
                     id="kw"
                     type="text"
                     required
                     className="text-input"
-                    placeholder="Contoh: Jumlah Penduduk, Kemiskinan 2024, Kontak Petugas"
+                    placeholder="Contoh: Jadwal Rilis BPS, Konsultasi Statistik, Kontak PST"
                     value={formKeyword}
                     onChange={(e) => setFormKeyword(e.target.value)}
+                    autoFocus
                   />
-                  <p className="input-hint">Jika pengguna WhatsApp mengetik kalimat ini, bot akan langsung mengirim template di bawah.</p>
+                  <p className="input-hint">Jika pengguna WhatsApp mengetik kalimat ini, bot akan langsung membalas dengan template di bawah.</p>
                 </div>
 
                 <div>
@@ -833,7 +1058,7 @@ export default function KeywordsPage() {
                     id="cat"
                     type="text"
                     className="text-input"
-                    placeholder="Contoh: Kependudukan, Kemiskinan, Layanan PST"
+                    placeholder="Contoh: Layanan PST, Informasi Umum, FAQ"
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value)}
                   />
@@ -873,11 +1098,11 @@ export default function KeywordsPage() {
                     required
                     className="textarea-input"
                     rows={6}
-                    placeholder="Tuliskan format pesan balasan resmi BPS..."
+                    placeholder="Tuliskan isi pesan balasan resmi..."
                     value={formResponse}
                     onChange={(e) => setFormResponse(e.target.value)}
                   />
-                  <p className="input-hint">Mendukung format WhatsApp: *tebal*, _miring_, dan baris baru.</p>
+                  <p className="input-hint">Mendukung format WhatsApp: *tebal*, _miring_, dan emoji.</p>
                 </div>
               </div>
 
@@ -890,6 +1115,141 @@ export default function KeywordsPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Preview Read-Only (FOR DATASET TEMPLATES) */}
+      {previewTemplate && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999,
+            padding: 16,
+            backdropFilter: 'blur(3px)',
+          }}
+          onClick={() => setPreviewTemplate(null)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: 'var(--radius-xl)',
+              maxWidth: 580,
+              width: '100%',
+              padding: '24px',
+              boxShadow: 'var(--shadow-xl)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 'var(--radius-lg)',
+                    background: '#e0f2fe',
+                    color: '#0284c7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Lock size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--slate-900)' }}>
+                    Preview Template Dataset Resmi
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--slate-500)' }}>
+                    Keyword: <strong>&quot;{previewTemplate.keyword}&quot;</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewTemplate(null)}
+                style={{ background: 'transparent', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--slate-400)' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Read-Only Banner */}
+            <div
+              style={{
+                background: '#f0f9ff',
+                border: '1px solid #bae6fd',
+                borderRadius: 'var(--radius-md)',
+                padding: '10px 14px',
+                fontSize: 12.5,
+                color: '#0369a1',
+                marginBottom: 16,
+                lineHeight: 1.45,
+              }}
+            >
+              🔒 <strong>Template ini tidak dapat diedit secara manual</strong> karena datanya dihasilkan otomatis secara dinamis dari Katalog Dataset BPS. Jika ingin memperbarui angka atau rinciannya, perbarui data melalui menu <strong>Katalog Dataset</strong>.
+            </div>
+
+            {/* Formatted Preview Box */}
+            <div
+              style={{
+                background: '#efeae2',
+                borderRadius: 'var(--radius-lg)',
+                padding: '16px',
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  background: '#ffffff',
+                  borderRadius: '0px 8px 8px 8px',
+                  padding: '12px 14px',
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  color: '#111b21',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {previewTemplate.response}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              {previewTemplate.dataset_id ? (
+                <Link href={`/datasets/${previewTemplate.dataset_id}`}>
+                  <Button variant="secondary" size="sm" icon={<ExternalLink size={14} />}>
+                    Buka Dataset Asli
+                  </Button>
+                </Link>
+              ) : <div />}
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<Sparkles size={14} />}
+                  onClick={() => {
+                    handleSimSend(previewTemplate.keyword);
+                    setPreviewTemplate(null);
+                  }}
+                >
+                  Uji di Simulator WhatsApp
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setPreviewTemplate(null)}>
+                  Tutup
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

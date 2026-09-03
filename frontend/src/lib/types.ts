@@ -218,6 +218,9 @@ export interface ChatbotTemplate {
   response: string;
   category?: string;
   is_active?: boolean;
+  source_type?: 'DATASET' | 'MANUAL';
+  dataset_id?: string;
+  dataset_code?: string;
   updated_at?: string;
 }
 

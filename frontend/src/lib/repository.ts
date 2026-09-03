@@ -1148,11 +1148,58 @@ function saveCachedTemplates(templates: ChatbotTemplate[]): void {
 
 export const ChatbotTemplateRepo = {
   getAll(): ChatbotTemplate[] {
-    return getCachedTemplates();
+    const manualList = getCachedTemplates().map((t) => ({
+      ...t,
+      source_type: 'MANUAL' as const,
+    }));
+
+    // Auto-generate template dari dataset yang ada di pangkalan data BPS (Read-only / Preview saja)
+    const datasetTemplates: ChatbotTemplate[] = DatasetRepo.getAll().map((ds) => {
+      const records = getStore()
+        .records.filter((r) => r.dataset_id === ds.id && !r.is_deleted && r.value !== null)
+        .sort((a, b) => b.period.localeCompare(a.period));
+
+      let dataSummary = '';
+      if (records.length > 0) {
+        const latest = records.slice(0, 5);
+        dataSummary = latest
+          .map(
+            (r) =>
+              `• Periode *${r.period}* (${r.region}): *${r.value?.toLocaleString('id-ID')}* ${r.unit || ds.unit}`
+          )
+          .join('\n');
+      } else {
+        dataSummary = '• _Data sedang dalam pemutakhiran berkala._';
+      }
+
+      const response =
+        `📊 *DATA RESMI: ${ds.name.toUpperCase()}*\n` +
+        `🏛️ *BPS Kabupaten Bangka* (Kode: ${ds.code})\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `📍 *Cakupan:* ${ds.geographic_scope}\n` +
+        `📈 *Rincian Indikator Terbaru:*\n${dataSummary}\n\n` +
+        (ds.definition ? `ℹ️ *Konsep/Definisi:* ${ds.definition.slice(0, 120)}...\n\n` : '') +
+        `📌 *Sumber Data:* ${ds.source || 'BPS Kabupaten Bangka'}\n` +
+        `💡 _Data diambil otomatis langsung dari Katalog Dataset SAPA BPS._`;
+
+      return {
+        id: `tpl-dataset-${ds.id}`,
+        keyword: ds.name,
+        response,
+        category: ds.category || 'Data Statistik BPS',
+        source_type: 'DATASET',
+        dataset_id: ds.id,
+        dataset_code: ds.code,
+        is_active: true,
+        updated_at: ds.updated_at,
+      };
+    });
+
+    return [...datasetTemplates, ...manualList];
   },
 
   getById(id: string): ChatbotTemplate | undefined {
-    return getCachedTemplates().find((t) => t.id === id);
+    return this.getAll().find((t) => t.id === id);
   },
 
   async syncWithBackendFaqs(): Promise<void> {
@@ -1164,6 +1211,7 @@ export const ChatbotTemplateRepo = {
           keyword: f.pertanyaan,
           response: f.jawaban.replace(/<br\s*\/?>/gi, '\n'),
           category: 'Resmi BPS',
+          source_type: 'MANUAL',
           is_active: true,
           updated_at: new Date().toISOString(),
         }));
@@ -1179,6 +1227,7 @@ export const ChatbotTemplateRepo = {
       keyword: data.keyword.trim(),
       response: data.response.trim(),
       category: data.category?.trim() || 'Umum',
+      source_type: 'MANUAL',
       is_active: data.is_active !== undefined ? data.is_active : true,
       updated_at: new Date().toISOString(),
     };
@@ -1191,6 +1240,11 @@ export const ChatbotTemplateRepo = {
   },
 
   update(id: string, data: Partial<ChatbotTemplate>): ChatbotTemplate | undefined {
+    if (id.startsWith('tpl-dataset-')) {
+      console.warn('Template yang bersumber dari dataset bersifat read-only dan tidak dapat diedit.');
+      return undefined;
+    }
+
     const list = [...getCachedTemplates()];
     const idx = list.findIndex((t) => t.id === id);
     if (idx === -1) return undefined;
@@ -1199,6 +1253,7 @@ export const ChatbotTemplateRepo = {
     const updated: ChatbotTemplate = {
       ...old,
       ...data,
+      source_type: 'MANUAL',
       updated_at: new Date().toISOString(),
     };
     list[idx] = updated;
@@ -1213,6 +1268,11 @@ export const ChatbotTemplateRepo = {
   },
 
   delete(id: string): boolean {
+    if (id.startsWith('tpl-dataset-')) {
+      console.warn('Template yang bersumber dari dataset bersifat read-only dan tidak dapat dihapus.');
+      return false;
+    }
+
     const list = [...getCachedTemplates()];
     const target = list.find((t) => t.id === id);
     if (!target) return false;
