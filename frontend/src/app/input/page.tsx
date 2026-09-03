@@ -634,22 +634,30 @@ function SpreadsheetEditor({
   };
 
   const confirmPaste = () => {
-    if (!pastePreview) return;
+    if (!pastePreview || pastePreview.length === 0) return;
     pushHistory();
 
     const newRows: SpreadsheetRowData[] = pastePreview.map((rowData) => {
       const row = createEmptyRow(dataset);
       if (rowData.length >= 2) {
-        row.period = rowData[0];
-        row.value = rowData[1];
+        row.period = rowData[0].trim();
+        row.value = rowData[1].replace(/%/g, '').trim();
+      } else if (rowData.length === 1) {
+        const match = rowData[0].match(/^(.*?)\s+([-+]?[\d.,]+%?)$/);
+        if (match) {
+          row.period = match[1].trim();
+          row.value = match[2].replace(/%/g, '').trim();
+        } else {
+          row.period = rowData[0].trim();
+        }
       }
-      if (rowData.length >= 3) row.region = rowData[2];
-      if (rowData.length >= 4) row.unit = rowData[3];
+      if (rowData.length >= 3) row.region = rowData[2].trim();
+      if (rowData.length >= 4) row.unit = rowData[3].trim();
       return row;
     });
 
     setRows((prev) => {
-      const filtered = prev.filter((r) => r.period || r.value);
+      const filtered = prev.filter((r) => (r.period && r.period.trim()) || (r.value && r.value.trim()));
       return [...filtered, ...newRows];
     });
 
@@ -666,7 +674,8 @@ function SpreadsheetEditor({
     const validatedRows = rows.map((row) => {
       if (!row.period && !row.value) return row;
 
-      const numValue = row.value ? parseFloat(row.value.replace(/\./g, '').replace(',', '.')) : null;
+      const cleanVal = row.value ? row.value.replace(/%/g, '').replace(/\./g, '').replace(',', '.').trim() : null;
+      const numValue = cleanVal && !isNaN(parseFloat(cleanVal)) ? parseFloat(cleanVal) : null;
       const errs = validateRecord(
         {
           indicator: row.indicator,
@@ -709,7 +718,7 @@ function SpreadsheetEditor({
         indicator: row.indicator,
         region: row.region,
         period: row.period,
-        value: row.value ? parseFloat(row.value.replace(/\./g, '').replace(',', '.')) : null,
+        value: row.value ? parseFloat(row.value.replace(/%/g, '').replace(/\./g, '').replace(',', '.').trim()) : null,
         unit: row.unit,
         notes: row.notes,
         source: dataset.source,
@@ -872,17 +881,23 @@ function SpreadsheetEditor({
           title="Tempel Data dari Spreadsheet (Excel/Sheets)"
         >
           <p style={{ fontSize: 13, color: '#475569', marginBottom: 12 }}>
-            Salin data tabel dari Excel (kolom: <strong>Tahun / Periode</strong> dan <strong>Nilai</strong>), lalu tempel di kotak berikut:
+            Salin data tabel dari Excel / Sheets atau ketik langsung (kolom: <strong>Tahun / Periode</strong> dan <strong>Nilai</strong>):
           </p>
           <textarea
             className="paste-area"
             value={pasteText}
             onChange={(e) => {
-              setPasteText(e.target.value);
-              setPastePreview(null);
+              const val = e.target.value;
+              setPasteText(val);
+              if (val.trim()) {
+                setPastePreview(parseTabSeparated(val));
+              } else {
+                setPastePreview(null);
+              }
             }}
-            placeholder={`2020\t298000\n2021\t304500\n2022\t311200\n2023\t318900\n2024\t325100`}
+            placeholder={`2020 8%\n2021 7%\n2022 10%\natau tempel data berkolom langsung dari Excel / Google Sheets`}
             rows={6}
+            autoFocus
           />
           {!pastePreview && pasteText.trim() && (
             <div style={{ marginTop: 12 }}>
@@ -907,10 +922,10 @@ function SpreadsheetEditor({
                     </tr>
                   </thead>
                   <tbody>
-                    {pastePreview.slice(0, 5).map((row, i) => (
+                    {pastePreview.slice(0, 10).map((row, i) => (
                       <tr key={i}>
-                        <td style={{ fontWeight: 600 }}>{row[0]}</td>
-                        <td>{row[1]}</td>
+                        <td style={{ fontWeight: 600 }}>{row[0] || '-'}</td>
+                        <td style={{ color: row[1] ? 'inherit' : '#94a3b8' }}>{row[1] || '(Kosong)'}</td>
                       </tr>
                     ))}
                   </tbody>
