@@ -329,7 +329,6 @@ export default function UsersPage() {
                 }}
               >
                 {filteredUsers.map((u) => {
-                  const contributedCount = datasets.filter((d) => d.created_by === u.id || d.updated_by === u.id).length;
                   const isCurrent = currentUser?.id === u.id;
 
                   return (
@@ -419,25 +418,6 @@ export default function UsersPage() {
                               </a>
                             </div>
                           </div>
-
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenModal(u)}
-                              style={{ background: 'transparent', border: 'none', padding: 6, color: 'var(--slate-600)', cursor: 'pointer' }}
-                              title="Edit Pengguna"
-                            >
-                              <Edit2 size={15} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteUser(u)}
-                              style={{ background: 'transparent', border: 'none', padding: 6, color: 'var(--error-text)', cursor: 'pointer' }}
-                              title="Hapus Pengguna"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
                         </div>
 
                         {/* Badges & Meta */}
@@ -473,22 +453,18 @@ export default function UsersPage() {
                         </div>
                       </div>
 
-                      {/* Footer Activity Info */}
+                      {/* Footer Info */}
                       <div
                         style={{
                           borderTop: '1px solid var(--slate-150)',
                           paddingTop: 12,
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'space-between',
+                          justifyContent: 'flex-end',
                           fontSize: 12,
                           color: 'var(--slate-500)',
                         }}
                       >
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Database size={13} style={{ color: 'var(--primary-600)' }} />
-                          <strong>{contributedCount}</strong> dataset dikelola
-                        </span>
                         <span>Terdaftar: {formatDate(u.created_at)}</span>
                       </div>
                     </div>
