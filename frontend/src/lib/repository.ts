@@ -929,19 +929,50 @@ export const UserRepo = {
 export function getDashboardSummary(): DashboardSummary {
   const datasets = DatasetRepo.getAll();
   const records = getStore().records.filter((r) => !r.is_deleted);
-  const pendingReviews = ReviewRepo.getPending();
+
+  // Hitung jumlah data yang memerlukan verifikasi lapangan (anomali fluktuasi tajam yang belum dikonfirmasi)
+  const activeDatasets = datasets.filter((d) => d.status !== DataStatus.ARCHIVED);
+  let pendingVerifikasiCount = 0;
+  activeDatasets.forEach((ds) => {
+    const dsRecords = records
+      .filter((r) => r.dataset_id === ds.id && r.value !== null && !isNaN(r.value))
+      .sort((a, b) => a.period.localeCompare(b.period));
+
+    const groups = new Map<string, DataRecord[]>();
+    dsRecords.forEach((r) => {
+      const key = `${r.indicator}|${r.region}`;
+      const existing = groups.get(key) || [];
+      existing.push(r);
+      groups.set(key, existing);
+    });
+
+    groups.forEach((groupRecords) => {
+      for (let i = 1; i < groupRecords.length; i++) {
+        const prev = groupRecords[i - 1];
+        const curr = groupRecords[i];
+        if (prev.value !== null && curr.value !== null && prev.value !== 0) {
+          const diff = curr.value - prev.value;
+          const changePercent = (diff / Math.abs(prev.value)) * 100;
+          if (Math.abs(changePercent) >= 25) {
+            const isConfirmed = curr.notes?.includes('[Dikonfirmasi Valid]') || false;
+            if (!isConfirmed) pendingVerifikasiCount++;
+          }
+        }
+      }
+    });
+  });
+
+  const draftDatasetsCount = datasets.filter((d) => d.status === DataStatus.DRAFT).length;
+  const draftRecordsCount = records.filter((r) => r.status === DataStatus.DRAFT).length;
 
   return {
-    total_datasets: datasets.filter(
-      (d) => d.status !== DataStatus.ARCHIVED
-    ).length,
+    total_datasets: activeDatasets.length,
     published_records: records.filter(
       (r) => r.status === DataStatus.PUBLISHED
     ).length,
-    draft_records: records.filter(
-      (r) => r.status === DataStatus.DRAFT
-    ).length,
-    pending_review: pendingReviews.length,
+    draft_records: draftRecordsCount,
+    draft_datasets: draftDatasetsCount,
+    pending_review: pendingVerifikasiCount,
   };
 }
 

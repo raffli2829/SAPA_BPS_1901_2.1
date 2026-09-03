@@ -25,6 +25,7 @@ import {
   Layers,
   BarChart3,
   AlertTriangle,
+  ShieldCheck,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -198,21 +199,29 @@ function PageContent({
                 />
                 <StatCard
                   label="Data Draf (Draft)"
-                  value={formatNumber(summary.draft_records)}
+                  value={
+                    (summary.draft_datasets || 0) > 0
+                      ? `${summary.draft_datasets} Dataset`
+                      : formatNumber(summary.draft_records)
+                  }
                   icon={<FileEdit size={20} />}
                   iconColor="slate"
                   href="/datasets?status=DRAFT"
-                  footerText="Menunggu kelengkapan"
+                  footerText={
+                    summary.draft_records > 0
+                      ? `${summary.draft_records} data belum publish`
+                      : 'Menunggu kelengkapan data'
+                  }
                   trendText="Perlu aksi"
                 />
                 <StatCard
-                  label="Peringatan Anomali"
-                  value={summary.pending_review > 0 ? summary.pending_review : '0 Data'}
-                  icon={<AlertTriangle size={20} />}
+                  label="Verifikasi Data"
+                  value={summary.pending_review > 0 ? `${summary.pending_review} Data` : '0 Data'}
+                  icon={<ShieldCheck size={20} />}
                   iconColor="amber"
                   href="/issues"
-                  footerText="Peringatan fluktuasi tajam"
-                  trendText="Periksa →"
+                  footerText="Perlu verifikasi lapangan"
+                  trendText="Verifikasi →"
                 />
               </div>
             )}
