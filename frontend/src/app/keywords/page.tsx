@@ -69,6 +69,10 @@ export default function KeywordsPage() {
   ]);
   const [simInput, setSimInput] = useState('');
   const [isBotTyping, setIsBotTyping] = useState(false);
+  const [simSubmenu, setSimSubmenu] = useState<{
+    category: string;
+    datasets: { id: string; name: string; code: string; response?: string }[];
+  } | null>(null);
 
   // Bot Connection Status
   const [botStatus, setBotStatus] = useState<{ state: string; phoneNumber?: string }>({ state: 'connected' });
@@ -259,30 +263,85 @@ export default function KeywordsPage() {
 
       let reply = '';
 
-      if (/^\d+$/.test(clean)) {
-        const num = parseInt(clean, 10);
-        const item = dynamicItems.find((d) => d.num === num);
-        if (item && item.response) {
-          reply = item.response;
+      // 1. Jika pengguna sedang berada di dalam Sub-menu pemilihan dataset rinci
+      if (simSubmenu) {
+        if (['menu', 'batal', 'kembali', 'exit', 'keluar', 'p'].includes(clean)) {
+          setSimSubmenu(null);
+          reply = dynamicMenuStr;
+        } else if (/^\d+$/.test(clean)) {
+          const subNum = parseInt(clean, 10);
+          if (subNum >= 1 && subNum <= simSubmenu.datasets.length) {
+            const chosen = simSubmenu.datasets[subNum - 1];
+            setSimSubmenu(null);
+            const foundTpl = templates.find((t) => t.dataset_id === chosen.id || t.keyword.toLowerCase() === chosen.name.toLowerCase());
+            reply = foundTpl ? foundTpl.response : chosen.response || `📊 *DATA: ${chosen.name}* (${chosen.code})`;
+          } else {
+            reply =
+              `⚠️ Pilihan nomor *${subNum}* tidak tersedia.\n\n` +
+              `Silakan balas dengan angka *1* - *${simSubmenu.datasets.length}*, atau ketik *menu* untuk kembali ke Menu Utama.`;
+          }
         } else {
-          reply = `Maaf, pilihan nomor *${num}* belum tersedia.\n\n${dynamicMenuStr}`;
+          setSimSubmenu(null);
         }
-      } else if (clean === 'menu' || clean === 'sapa' || clean === 'halo' || clean === 'p') {
-        reply = dynamicMenuStr;
-      } else {
-        let matched = templates.find((t) => t.keyword.toLowerCase() === clean);
-        if (!matched) {
-          matched = templates.find(
-            (t) => clean.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(clean)
-          );
-        }
+      }
 
-        if (matched) {
-          reply = matched.response;
+      // 2. Jika tidak dalam submenu
+      if (!reply) {
+        if (/^\d+$/.test(clean)) {
+          const num = parseInt(clean, 10);
+          const item = dynamicItems.find((d) => d.num === num);
+          if (item) {
+            if (item.type === 'service') {
+              reply = item.response || '';
+            } else {
+              // Cek apakah ada lebih dari 1 dataset dalam kategori/topik ini
+              const catLower = item.label.trim().toLowerCase();
+              const matchedDatasets = datasetTemplates.filter((dt) => {
+                const dtCat = (dt.category || '').trim().toLowerCase();
+                const dtName = dt.keyword.trim().toLowerCase();
+                return dtCat === catLower || dtName === catLower || dtName.includes(catLower);
+              });
+
+              if (matchedDatasets.length > 1) {
+                const subDs = matchedDatasets.map((d) => ({
+                  id: d.dataset_id || d.id,
+                  name: d.keyword,
+                  code: d.dataset_code || 'BPS',
+                  response: d.response,
+                }));
+                setSimSubmenu({ category: item.label, datasets: subDs });
+                const lines = subDs.map((d, i) => `${i + 1}. *${d.name}* (${d.code})`);
+                reply =
+                  `📊 *PILIHAN DATASET: ${item.label.toUpperCase()}*\n` +
+                  `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                  `Terdapat *${subDs.length} dataset statistik resmi* dalam kategori ini. Silakan balas dengan nomor dataset yang ingin Anda lihat lebih rinci:\n\n` +
+                  lines.join('\n') +
+                  `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                  `💡 _Balas dengan angka *1* - *${subDs.length}*, atau ketik *menu* untuk kembali ke Menu Utama._`;
+              } else {
+                reply = item.response || '';
+              }
+            }
+          } else {
+            reply = `Maaf, pilihan nomor *${num}* belum tersedia.\n\n${dynamicMenuStr}`;
+          }
+        } else if (clean === 'menu' || clean === 'sapa' || clean === 'halo' || clean === 'p') {
+          reply = dynamicMenuStr;
         } else {
-          reply =
-            `Mohon maaf, kata kunci *"${text}"* belum terdaftar dalam template cepat kami.\n\n` +
-            `💡 _Ketik *menu* untuk melihat daftar topik data resmi BPS Kab. Bangka, atau ketik *petugas* untuk konsultasi PST._`;
+          let matched = templates.find((t) => t.keyword.toLowerCase() === clean);
+          if (!matched) {
+            matched = templates.find(
+              (t) => clean.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(clean)
+            );
+          }
+
+          if (matched) {
+            reply = matched.response;
+          } else {
+            reply =
+              `Mohon maaf, kata kunci *"${text}"* belum terdaftar dalam template cepat kami.\n\n` +
+              `💡 _Ketik *menu* untuk melihat daftar topik data resmi BPS Kab. Bangka, atau ketik *petugas* untuk konsultasi PST._`;
+          }
         }
       }
 

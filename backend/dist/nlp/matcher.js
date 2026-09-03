@@ -348,7 +348,8 @@ export function findExactFAQMatch(userMessage, faqData) {
     }
     return null;
 }
-export async function processUserMessage(rawMessage, imageBase64) {
+const pendingSubmenuSessions = new Map();
+export async function processUserMessage(rawMessage, imageBase64, sessionId = 'default') {
     const message = rawMessage.trim();
     // 1. Gambar / Foto dari WhatsApp -> Ditangani langsung oleh Qwen2-VL Multimodal
     if (imageBase64) {
@@ -362,6 +363,37 @@ export async function processUserMessage(rawMessage, imageBase64) {
         return 'Mohon sampaikan pertanyaan Anda seputar data statistik BPS.';
     const msgClean = message.toLowerCase();
     const faqData = loadFAQData();
+    // 1.5. Cek apakah sesi ini sedang menunggu pemilihan sub-dataset (kategori dengan > 1 dataset)
+    const pending = pendingSubmenuSessions.get(sessionId);
+    if (pending) {
+        if (Date.now() - pending.timestamp > 15 * 60 * 1000) {
+            pendingSubmenuSessions.delete(sessionId);
+        }
+        else {
+            if (['menu', 'batal', 'kembali', 'exit', 'keluar', 'p'].includes(msgClean)) {
+                pendingSubmenuSessions.delete(sessionId);
+                return generateDynamicMenu(faqData);
+            }
+            if (/^\d+$/.test(msgClean)) {
+                const subNum = parseInt(msgClean, 10);
+                if (subNum >= 1 && subNum <= pending.datasets.length) {
+                    const chosen = pending.datasets[subNum - 1];
+                    pendingSubmenuSessions.delete(sessionId);
+                    const liveData = getPublishedDatasetResponse(chosen.id);
+                    if (liveData)
+                        return liveData;
+                }
+                else {
+                    return (`⚠️ Pilihan nomor *${subNum}* tidak tersedia.\n\n` +
+                        `Silakan balas dengan angka *1* sampai *${pending.datasets.length}*, atau ketik *menu* untuk kembali ke Menu Utama.`);
+                }
+            }
+            else {
+                // Jika pengguna mengetik kata kunci lain, bersihkan status submenu dan teruskan ke pencarian biasa
+                pendingSubmenuSessions.delete(sessionId);
+            }
+        }
+    }
     // 2. PROTEKSI DATA INFLASI / IHK: Dilarang keras halusinasi/mengarang data
     const INFLASI_KEYWORDS = ["infla", "inflasi", "inflansi", "ihk", "indeks harga konsumen", "laju inflasi", "defla", "deflasi"];
     if (INFLASI_KEYWORDS.some(k => msgClean.includes(k))) {
@@ -411,7 +443,27 @@ export async function processUserMessage(rawMessage, imageBase64) {
                 }
                 return formatPrettyResponse('Layanan BPS Kabupaten Bangka', 'Layanan BPS Kabupaten Bangka mencakup:\n1. Konsultasi Statistik Terpadu (PST)\n2. Permintaan Data Mikro dan Publikasi Resmi BPS\n3. Rekomendasi Kegiatan Statistik (Romantik)\n4. Layanan Pengaduan & Informasi Publik\n\nHubungi petugas kami untuk layanan tatap muka atau daring.');
             }
-            // Tipe 'dataset': cari data live yang terpublikasi
+            // Tipe 'dataset': Cek apakah kategori ini memiliki LEBIH DARI 1 DATASET TERBITAN
+            const store = loadBackendStore();
+            const targetCategory = (matchedItem.datasetCategory || matchedItem.label).trim().toLowerCase();
+            const categoryDatasets = store.datasets.filter((d) => d.status === DataStatus.PUBLISHED &&
+                (d.category.trim().toLowerCase() === targetCategory ||
+                    d.name.trim().toLowerCase().includes(targetCategory)));
+            if (categoryDatasets.length > 1) {
+                pendingSubmenuSessions.set(sessionId, {
+                    category: matchedItem.label,
+                    datasets: categoryDatasets.map((d) => ({ id: d.id, name: d.name, code: d.code })),
+                    timestamp: Date.now(),
+                });
+                const lines = categoryDatasets.map((d, i) => `${i + 1}. *${d.name}* (${d.code})`);
+                return (`📊 *PILIHAN DATASET: ${matchedItem.label.toUpperCase()}*\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `Terdapat *${categoryDatasets.length} dataset statistik resmi* dalam kategori ini. Silakan balas dengan nomor dataset yang ingin Anda lihat lebih rinci:\n\n` +
+                    lines.join('\n') +
+                    `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `💡 _Balas dengan angka *1* - *${categoryDatasets.length}* untuk melihat data rinci, atau ketik *menu* untuk kembali ke Menu Utama._`);
+            }
+            // Jika hanya ada 1 dataset, langsung jawab data resminya
             const liveData = getPublishedDatasetResponse(matchedItem.datasetId || matchedItem.datasetCategory || matchedItem.datasetName || matchedItem.label);
             if (liveData) {
                 console.log(`[MENU LIVE DATA MATCH] Menu ${num} (${matchedItem.label}) dijawab dengan data dinamis website.`);

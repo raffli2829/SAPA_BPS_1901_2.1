@@ -152,7 +152,7 @@ export async function handleIncomingMessages(sock: WASocket, messages: any[]) {
     // 3. Balasan Teks / Analisis Gambar Cerdas (Qwen2-VL & NLP)
     try {
       await sock.sendPresenceUpdate('composing', jid);
-      const reply = await processUserMessage(text, imageBase64);
+      const reply = await processUserMessage(text, imageBase64, remoteNumber);
       const res = await safeSendMessage(jid, { text: reply }, sendOpts);
       if (res) {
         console.log(`[BALASAN TERKIRIM] -> "${reply.substring(0, 80).replace(/\n/g, ' ')}..."\n`);

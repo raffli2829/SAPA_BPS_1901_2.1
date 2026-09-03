@@ -694,11 +694,12 @@ export function createWebServer(): express.Express {
   // POST /api/chat & /chat
   const handleChat = async (req: Request, res: Response) => {
     const message = req.body.message || '';
+    const sessionId = req.body.sessionId || String(req.ip || 'web-client');
     if (!message.trim()) {
       res.json({ success: false, response: 'Silakan ketik pertanyaan atau topik statistik resmi BPS.' });
       return;
     }
-    const reply = await processUserMessage(message);
+    const reply = await processUserMessage(message, undefined, sessionId);
     res.json({ success: true, response: reply });
   };
 
@@ -707,7 +708,8 @@ export function createWebServer(): express.Express {
 
   app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     const message = req.body.message || '';
-    const reply = await processUserMessage(message);
+    const sessionId = req.body.sessionId || String(req.ip || 'webhook-client');
+    const reply = await processUserMessage(message, undefined, sessionId);
     res.json({ status: 'success', response: reply });
   });
 

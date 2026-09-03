@@ -597,18 +597,20 @@ export function createWebServer() {
     // POST /api/chat & /chat
     const handleChat = async (req, res) => {
         const message = req.body.message || '';
+        const sessionId = req.body.sessionId || String(req.ip || 'web-client');
         if (!message.trim()) {
             res.json({ success: false, response: 'Silakan ketik pertanyaan atau topik statistik resmi BPS.' });
             return;
         }
-        const reply = await processUserMessage(message);
+        const reply = await processUserMessage(message, undefined, sessionId);
         res.json({ success: true, response: reply });
     };
     app.post('/api/chat', handleChat);
     app.post('/chat', handleChat);
     app.post('/webhook/whatsapp', async (req, res) => {
         const message = req.body.message || '';
-        const reply = await processUserMessage(message);
+        const sessionId = req.body.sessionId || String(req.ip || 'webhook-client');
+        const reply = await processUserMessage(message, undefined, sessionId);
         res.json({ status: 'success', response: reply });
     });
     // ============================================================
