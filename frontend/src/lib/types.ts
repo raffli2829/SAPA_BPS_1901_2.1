@@ -32,6 +32,7 @@ export enum AuditAction {
   REJECT = 'REJECT',
   PUBLISH = 'PUBLISH',
   ARCHIVE = 'ARCHIVE',
+  VERIFY_ANOMALY = 'VERIFY_ANOMALY',
 }
 
 // --- Data Models ---
@@ -209,6 +210,17 @@ export interface SpreadsheetRow {
 export type TabValue = 'data' | 'metadata' | 'history';
 export type InputMode = 'form' | 'spreadsheet';
 
+// --- Chatbot Template ---
+
+export interface ChatbotTemplate {
+  id: string;
+  keyword: string;
+  response: string;
+  category?: string;
+  is_active?: boolean;
+  updated_at?: string;
+}
+
 // --- Status display helpers ---
 
 export const STATUS_LABELS: Record<DataStatus, string> = {
@@ -219,8 +231,8 @@ export const STATUS_LABELS: Record<DataStatus, string> = {
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
-  [UserRole.DATA_ENTRY]: 'Pegawai / Data Entry',
-  [UserRole.REVIEWER]: 'Reviewer / Admin',
+  [UserRole.DATA_ENTRY]: 'Pengelola Data Statistik',
+  [UserRole.REVIEWER]: 'Pengelola Data Statistik',
 };
 
 export const PERIOD_TYPE_LABELS: Record<PeriodType, string> = {

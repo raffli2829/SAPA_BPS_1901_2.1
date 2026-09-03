@@ -8,7 +8,7 @@ import {
   Database,
   PenLine,
   Upload,
-  ClipboardCheck,
+  MessageSquare,
   AlertTriangle,
   History,
   FileText,
@@ -21,7 +21,6 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS } from '@/lib/types';
-import { ReviewRepo } from '@/lib/repository';
 
 interface NavItem {
   label: string;
@@ -47,27 +46,13 @@ export default function Sidebar({
   const pathname = usePathname();
   const { user } = useAuth();
 
-  const pendingReviews = React.useMemo(() => {
-    try {
-      return ReviewRepo.getPending().length;
-    } catch {
-      return 0;
-    }
-  }, []);
-
   const navItems: NavItem[] = [
     { label: 'Dashboard', href: '/', icon: <LayoutDashboard size={18} /> },
     { label: 'Katalog Dataset', href: '/datasets', icon: <Database size={18} />, group: 'DATA STATISTIK' },
     { label: 'Input Data', href: '/input', icon: <PenLine size={18} />, group: 'DATA STATISTIK' },
     { label: 'Import Excel / CSV', href: '/import', icon: <Upload size={18} />, group: 'DATA STATISTIK' },
-    {
-      label: 'Menunggu Review',
-      href: '/review',
-      icon: <ClipboardCheck size={18} />,
-      group: 'KUALITAS & VALIDASI',
-      badge: pendingReviews > 0 ? pendingReviews : undefined,
-    },
-    { label: 'Diagnostik Data', href: '/issues', icon: <AlertTriangle size={18} />, group: 'KUALITAS & VALIDASI' },
+    { label: 'Template Chatbot', href: '/keywords', icon: <MessageSquare size={18} />, group: 'CHATBOT & LAYANAN' },
+    { label: 'Data Anomali', href: '/issues', icon: <AlertTriangle size={18} />, group: 'KUALITAS & VALIDASI' },
     { label: 'Riwayat Audit', href: '/history', icon: <History size={18} />, group: 'SISTEM & RIWAYAT' },
     { label: 'Kamus Metadata', href: '/metadata', icon: <FileText size={18} />, group: 'SISTEM & RIWAYAT' },
     { label: 'Manajemen Pengguna', href: '/users', icon: <Users size={18} />, group: 'SISTEM & RIWAYAT' },

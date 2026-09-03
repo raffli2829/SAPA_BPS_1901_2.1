@@ -220,7 +220,7 @@
       "indicator": "Jumlah Penduduk",
       "region": "Kabupaten Bangka",
       "period": "2025",
-      "value": 346069,
+      "value": 1346069,
       "unit": "Jiwa",
       "notes": "Proyeksi SP2020 Resmi",
       "source": "BPS",
@@ -228,7 +228,7 @@
       "created_by": "user-1",
       "updated_by": "user-1",
       "created_at": "2025-01-01T00:00:00Z",
-      "updated_at": "2026-09-03T01:07:25.098Z",
+      "updated_at": "2026-09-03T01:32:41.417Z",
       "is_deleted": false
     },
     {
@@ -852,6 +852,24 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "1788399161363-yo4z17a",
+      "entity_type": "record",
+      "entity_id": "rec-5",
+      "entity_name": "Jumlah Penduduk 2025",
+      "action": "UPDATE",
+      "changes": [
+        {
+          "field": "value",
+          "old_value": 346069,
+          "new_value": 1346069
+        }
+      ],
+      "user_id": "user-1",
+      "user_name": "Ahmad Fauzi",
+      "reason": "pecobaan",
+      "created_at": "2026-09-03T01:32:41.405Z"
+    },
     {
       "id": "1788397645062-392kcsj",
       "entity_type": "record",

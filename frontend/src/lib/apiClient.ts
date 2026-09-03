@@ -173,5 +173,19 @@ export const BackendApi = {
 
   async getFaqs(): Promise<Array<{ pertanyaan: string; jawaban: string }> | null> {
     return safeFetch<Array<{ pertanyaan: string; jawaban: string }>>(`${BASE_URL}/api/faqs`);
+  },
+
+  async saveFaq(pertanyaan: string, jawaban: string, old_pertanyaan?: string): Promise<{ status: string; message: string } | null> {
+    return safeFetch<{ status: string; message: string }>(`${BASE_URL}/api/faqs/save`, {
+      method: 'POST',
+      body: JSON.stringify({ pertanyaan, jawaban, old_pertanyaan }),
+    });
+  },
+
+  async deleteFaq(pertanyaan: string): Promise<{ status: string; message: string } | null> {
+    return safeFetch<{ status: string; message: string }>(`${BASE_URL}/api/faqs/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ pertanyaan }),
+    });
   }
 };

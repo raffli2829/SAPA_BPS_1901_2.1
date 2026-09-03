@@ -13,11 +13,13 @@ import {
   AuditAction,
   AuditChange,
   User,
+  UserRole,
   ReviewRequest,
   DashboardSummary,
   Category,
   ValidationError,
   AnomalyWarning,
+  ChatbotTemplate,
 } from './types';
 import {
   MOCK_DATASETS,
@@ -238,6 +240,41 @@ export const DatasetRepo = {
         d.code.toLowerCase().includes(q) ||
         d.category.toLowerCase().includes(q) ||
         d.geographic_scope.toLowerCase().includes(q)
+    );
+  },
+
+  getDistinctCategories(): string[] {
+    const fromCategories = getStore().categories.map((c) => c.name.trim()).filter(Boolean);
+    const fromDatasets = getStore().datasets.map((d) => d.category?.trim()).filter(Boolean);
+    return Array.from(new Set([...fromCategories, ...fromDatasets])).sort((a, b) => a.localeCompare('id'));
+  },
+
+  getDistinctUnits(): string[] {
+    const defaults = [
+      'Jiwa',
+      'Ribu Jiwa',
+      'Persen (%)',
+      'Miliar Rupiah',
+      'Triliun Rupiah',
+      'Tahun',
+      'Indeks',
+      'Ton',
+      'Rupiah / Kapita / Bulan',
+      'Rupiah / Tahun',
+      'Ha (Hektar)',
+      'Orang',
+      'Unit',
+    ];
+    const fromDatasets = getStore().datasets.map((d) => d.unit?.trim()).filter(Boolean);
+    const fromRecords = getStore().records.map((r) => r.unit?.trim()).filter(Boolean);
+    return Array.from(new Set([...defaults, ...fromDatasets, ...fromRecords])).sort((a, b) => a.localeCompare('id'));
+  },
+
+  isCodeTaken(code: string, excludeDatasetId?: string): boolean {
+    const clean = code.trim().toUpperCase();
+    if (!clean) return false;
+    return getStore().datasets.some(
+      (d) => d.code.trim().toUpperCase() === clean && d.id !== excludeDatasetId
     );
   },
 
@@ -654,6 +691,41 @@ export const RecordRepo = {
 
     return null;
   },
+
+  confirmAnomaly(
+    recordId: string,
+    userId: string,
+    userName: string,
+    customNote?: string
+  ): boolean {
+    const record = getStore().records.find((r) => r.id === recordId);
+    if (!record) return false;
+
+    const tag = '[Dikonfirmasi Valid]';
+    if (!record.notes.includes(tag)) {
+      record.notes = record.notes ? `${record.notes} ${tag}` : tag;
+    }
+    if (customNote) {
+      record.notes = `${record.notes} - ${customNote}`;
+    }
+    record.updated_at = new Date().toISOString();
+    record.updated_by = userId;
+
+    AuditRepo.log({
+      entity_type: 'record',
+      entity_id: record.id,
+      entity_name: `${record.indicator} (${record.period})`,
+      action: AuditAction.VERIFY_ANOMALY,
+      changes: [{ field: 'notes', old_value: '', new_value: record.notes }],
+      user_id: userId,
+      user_name: userName,
+      reason: customNote || 'Data anomali/lonjakan telah diverifikasi dan disetujui sebagai data valid lapangan.',
+    });
+
+    BackendApi.updateRecord(record.id, record).catch(() => {});
+    notify();
+    return true;
+  },
 };
 
 // ============================================================
@@ -822,6 +894,37 @@ export const UserRepo = {
   getByEmail(email: string): User | undefined {
     return getStore().users.find((u) => u.email === email);
   },
+
+  create(data: Omit<User, 'id' | 'created_at'>): User {
+    const newUser: User = {
+      id: `user-${Date.now()}`,
+      name: data.name.trim(),
+      email: data.email.trim(),
+      role: data.role || UserRole.DATA_ENTRY,
+      created_at: new Date().toISOString(),
+    };
+    getStore().users.push(newUser);
+    notify();
+    return newUser;
+  },
+
+  update(id: string, data: Partial<Omit<User, 'id'>>): User | undefined {
+    const user = getStore().users.find((u) => u.id === id);
+    if (!user) return undefined;
+    if (data.name) user.name = data.name.trim();
+    if (data.email) user.email = data.email.trim();
+    if (data.role) user.role = data.role;
+    notify();
+    return user;
+  },
+
+  delete(id: string): boolean {
+    const idx = getStore().users.findIndex((u) => u.id === id);
+    if (idx === -1) return false;
+    getStore().users.splice(idx, 1);
+    notify();
+    return true;
+  },
 };
 
 // ============================================================
@@ -956,3 +1059,168 @@ export function validateRecord(
 
   return errors;
 }
+
+// ============================================================
+// CHATBOT TEMPLATE REPOSITORY
+// ============================================================
+
+const CHATBOT_STORAGE_KEY = 'sapa_bps_chatbot_templates';
+
+const DEFAULT_TEMPLATES: ChatbotTemplate[] = [
+  {
+    id: 'tpl-1',
+    keyword: 'Jumlah Penduduk',
+    category: 'Kependudukan',
+    response: 'Jumlah Penduduk Kabupaten Bangka tahun 2025 tercatat sebanyak *346.069 jiwa*.\n\n📊 *Sumber:* Proyeksi Penduduk 2020-2035 Hasil SP2020 BPS.',
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'tpl-2',
+    keyword: 'Data Kemiskinan',
+    category: 'Sosial & Kesejahteraan',
+    response: '📊 *DATA KEMISKINAN KABUPATEN BANGKA*\n\n📍 *Kabupaten Bangka (2025):*\n• Jumlah Penduduk Miskin: *16,58 ribu jiwa*\n• Persentase Kemiskinan: *4,71%*\n• Garis Kemiskinan: *Rp734.575 / kapita / bulan*\n• Indeks Kedalaman (P1): *0,51* | Keparahan (P2): *0,09*',
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'tpl-3',
+    keyword: 'Pertumbuhan Ekonomi',
+    category: 'Ekonomi Makro',
+    response: '📊 *LAJU PERTUMBUHAN EKONOMI KAB. BANGKA*\n\n📈 *Pertumbuhan Tahunan:*\n• 2021: *7,46%*\n• 2022: *4,86%*\n• 2023: *4,42%*\n• 2024: *-0,44%*\n\n📈 *Pertumbuhan Triwulanan 2025 (y-on-y):*\n• Triwulan I: *5,28%*\n• Triwulan II: *4,14%*\n• Triwulan III: *5,19%*',
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'tpl-4',
+    keyword: 'Indeks Pembangunan Manusia (IPM)',
+    category: 'Indikator Makro',
+    response: '📊 *INDEKS PEMBANGUNAN MANUSIA (IPM) KAB. BANGKA*\n\n🌟 *Tahun 2025:* IPM *75,38* (Naik 0,96% dari 2024)\n• Umur Harapan Hidup (UHH): *73,56 tahun*\n• Rata-rata Lama Sekolah (RLS): *8,77 tahun*\n• Harapan Lama Sekolah (HLS): *13,13 tahun*\n• Pengeluaran per Kapita: *Rp 13.411.000,- / tahun*',
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'tpl-5',
+    keyword: 'Tenaga Kerja',
+    category: 'Ketenagakerjaan',
+    response: '📊 *DATA KETENAGAKERJAAN KAB. BANGKA (2021-2025)*\n\n💼 *Tahun 2025:*\n• Tingkat Partisipasi Angkatan Kerja (TPAK): *67,93%*\n• Tingkat Pengangguran Terbuka (TPT): *4,75%*',
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'tpl-6',
+    keyword: 'Hubungi Petugas PST BPS',
+    category: 'Layanan & Kontak',
+    response: '🏛️ *LAYANAN KONSULTASI STATISTIK TERPADU (PST)*\n*Badan Pusat Statistik Kabupaten Bangka*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏢 *Alamat Kantor:* Jl. Ahmad Yani Jalur Dua Sungailiat\n⏰ *Jam Layanan:* Senin – Jumat (08.00 – 15.30 WIB)\n📞 *WhatsApp PST:* https://wa.me/6281234567890\n✉️ *Email:* bps1901@bps.go.id',
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  },
+];
+
+let cachedTemplates: ChatbotTemplate[] | null = null;
+
+function getCachedTemplates(): ChatbotTemplate[] {
+  if (cachedTemplates) return cachedTemplates;
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(CHATBOT_STORAGE_KEY);
+      if (saved) {
+        cachedTemplates = JSON.parse(saved);
+        if (cachedTemplates && cachedTemplates.length > 0) {
+          return cachedTemplates;
+        }
+      }
+    } catch {}
+  }
+  cachedTemplates = [...DEFAULT_TEMPLATES];
+  return cachedTemplates;
+}
+
+function saveCachedTemplates(templates: ChatbotTemplate[]): void {
+  cachedTemplates = templates;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(CHATBOT_STORAGE_KEY, JSON.stringify(templates));
+    } catch {}
+  }
+  notify();
+}
+
+export const ChatbotTemplateRepo = {
+  getAll(): ChatbotTemplate[] {
+    return getCachedTemplates();
+  },
+
+  getById(id: string): ChatbotTemplate | undefined {
+    return getCachedTemplates().find((t) => t.id === id);
+  },
+
+  async syncWithBackendFaqs(): Promise<void> {
+    try {
+      const remoteFaqs = await BackendApi.getFaqs();
+      if (remoteFaqs && remoteFaqs.length > 0) {
+        const mapped: ChatbotTemplate[] = remoteFaqs.map((f, i) => ({
+          id: `tpl-remote-${i}`,
+          keyword: f.pertanyaan,
+          response: f.jawaban.replace(/<br\s*\/?>/gi, '\n'),
+          category: 'Resmi BPS',
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        }));
+        saveCachedTemplates(mapped);
+      }
+    } catch {}
+  },
+
+  create(data: Omit<ChatbotTemplate, 'id' | 'updated_at'>): ChatbotTemplate {
+    const list = [...getCachedTemplates()];
+    const newTpl: ChatbotTemplate = {
+      id: `tpl-${Date.now()}`,
+      keyword: data.keyword.trim(),
+      response: data.response.trim(),
+      category: data.category?.trim() || 'Umum',
+      is_active: data.is_active !== undefined ? data.is_active : true,
+      updated_at: new Date().toISOString(),
+    };
+    list.unshift(newTpl);
+    saveCachedTemplates(list);
+
+    // Sync ke file data_faq.csv backend secara background
+    BackendApi.saveFaq(newTpl.keyword, newTpl.response.replace(/\n/g, '<br>')).catch(() => {});
+    return newTpl;
+  },
+
+  update(id: string, data: Partial<ChatbotTemplate>): ChatbotTemplate | undefined {
+    const list = [...getCachedTemplates()];
+    const idx = list.findIndex((t) => t.id === id);
+    if (idx === -1) return undefined;
+
+    const old = list[idx];
+    const updated: ChatbotTemplate = {
+      ...old,
+      ...data,
+      updated_at: new Date().toISOString(),
+    };
+    list[idx] = updated;
+    saveCachedTemplates(list);
+
+    BackendApi.saveFaq(
+      updated.keyword,
+      updated.response.replace(/\n/g, '<br>'),
+      old.keyword
+    ).catch(() => {});
+    return updated;
+  },
+
+  delete(id: string): boolean {
+    const list = [...getCachedTemplates()];
+    const target = list.find((t) => t.id === id);
+    if (!target) return false;
+
+    const filtered = list.filter((t) => t.id !== id);
+    saveCachedTemplates(filtered);
+
+    BackendApi.deleteFaq(target.keyword).catch(() => {});
+    return true;
+  },
+};

@@ -24,6 +24,7 @@ import {
   Upload,
   Layers,
   BarChart3,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -205,13 +206,13 @@ function PageContent({
                   trendText="Perlu aksi"
                 />
                 <StatCard
-                  label="Menunggu Review"
-                  value={summary.pending_review}
-                  icon={<Clock size={20} />}
+                  label="Peringatan Anomali"
+                  value={summary.pending_review > 0 ? summary.pending_review : '0 Data'}
+                  icon={<AlertTriangle size={20} />}
                   iconColor="amber"
-                  href="/review"
-                  footerText={summary.pending_review > 0 ? "Perlu persetujuan reviewer" : "Semua draf bersih"}
-                  trendText={summary.pending_review > 0 ? "Tinjau →" : "Selesai"}
+                  href="/issues"
+                  footerText="Peringatan fluktuasi tajam"
+                  trendText="Periksa →"
                 />
               </div>
             )}

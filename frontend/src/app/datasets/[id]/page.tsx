@@ -302,25 +302,25 @@ function PageContent({
             </Button>
           </Link>
           <Button
-            variant="primary"
+            variant="success"
             size="sm"
-            icon={<Send size={14} />}
+            icon={<CheckCircle size={14} />}
             onClick={() =>
               setConfirmAction({
-                title: 'Ajukan Review Dataset?',
+                title: 'Publikasikan Dataset Sekarang?',
                 description:
-                  'Dataset ini akan dikirim untuk direview oleh petugas verifikator / reviewer BPS. Pastikan seluruh baris data sudah benar.',
-                action: () => onStatusChange(DataStatus.REVIEW),
+                  'Dataset ini akan langsung dipublikasikan secara resmi ke sistem data makro BPS dan tersinkronisasi ke chatbot WhatsApp.',
+                action: () => onStatusChange(DataStatus.PUBLISHED),
                 variant: 'default',
-                confirmLabel: 'Ajukan Sekarang',
+                confirmLabel: 'Publikasikan Sekarang',
               })
             }
           >
-            Ajukan Review
+            Publikasikan Dataset
           </Button>
         </>
       )}
-      {dataset.status === DataStatus.REVIEW && isReviewer && (
+      {dataset.status === DataStatus.REVIEW && (
         <>
           <Button
             variant="success"
@@ -337,7 +337,7 @@ function PageContent({
               })
             }
           >
-            Setujui
+            Setujui & Publikasikan
           </Button>
           <Button
             variant="danger"
@@ -345,15 +345,15 @@ function PageContent({
             icon={<XCircle size={14} />}
             onClick={() =>
               setConfirmAction({
-                title: 'Tolak Pengajuan Review?',
-                description: 'Dataset akan dikembalikan ke status draf untuk diperbaiki oleh operator data.',
+                title: 'Kembalikan ke Draf?',
+                description: 'Dataset akan dikembalikan ke status draf untuk diperbaiki.',
                 action: () => onStatusChange(DataStatus.DRAFT, 'Perlu perbaikan data'),
                 variant: 'danger',
-                confirmLabel: 'Tolak Review',
+                confirmLabel: 'Kembalikan ke Draf',
               })
             }
           >
-            Tolak
+            Kembalikan ke Draf
           </Button>
         </>
       )}
@@ -364,25 +364,23 @@ function PageContent({
               Tambah Baris Data Baru
             </Button>
           </Link>
-          {isReviewer && (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Archive size={14} />}
-              onClick={() =>
-                setConfirmAction({
-                  title: 'Arsipkan Dataset Ini?',
-                  description:
-                    'Dataset ini akan dipindahkan ke arsip dan tidak lagi berstatus aktif.',
-                  action: () => onStatusChange(DataStatus.ARCHIVED),
-                  variant: 'danger',
-                  confirmLabel: 'Arsipkan',
-                })
-              }
-            >
-              Arsipkan
-            </Button>
-          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Archive size={14} />}
+            onClick={() =>
+              setConfirmAction({
+                title: 'Arsipkan Dataset Ini?',
+                description:
+                  'Dataset ini akan dipindahkan ke arsip dan tidak lagi berstatus aktif.',
+                action: () => onStatusChange(DataStatus.ARCHIVED),
+                variant: 'danger',
+                confirmLabel: 'Arsipkan',
+              })
+            }
+          >
+            Arsipkan
+          </Button>
         </>
       )}
     </div>
@@ -670,6 +668,7 @@ function HistoryTab({ logs }: { logs: AuditLog[] }) {
     [AuditAction.REJECT]: 'Menolak',
     [AuditAction.PUBLISH]: 'Mempublikasikan',
     [AuditAction.ARCHIVE]: 'Mengarsipkan',
+    [AuditAction.VERIFY_ANOMALY]: 'Verifikasi Anomali',
   };
 
   if (logs.length === 0) {

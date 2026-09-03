@@ -11,17 +11,25 @@ import { AuditLog, AuditAction } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import { History } from 'lucide-react';
 
-const ACTION_LABELS: Record<AuditAction, string> = {
+const ACTION_LABELS: Record<string, string> = {
   [AuditAction.CREATE]: 'Membuat Data',
   [AuditAction.UPDATE]: 'Memperbarui Data',
   [AuditAction.DELETE]: 'Menghapus Data',
   [AuditAction.STATUS_CHANGE]: 'Mengubah Status',
-  [AuditAction.SUBMIT_REVIEW]: 'Mengajukan Review',
-  [AuditAction.APPROVE]: 'Menyetujui Review',
-  [AuditAction.REJECT]: 'Menolak Review',
   [AuditAction.PUBLISH]: 'Mempublikasikan',
   [AuditAction.ARCHIVE]: 'Mengarsipkan',
+  [AuditAction.VERIFY_ANOMALY]: 'Verifikasi Anomali',
 };
+
+const FILTER_ACTION_OPTIONS = [
+  { value: AuditAction.CREATE, label: 'Membuat Data' },
+  { value: AuditAction.UPDATE, label: 'Memperbarui Data' },
+  { value: AuditAction.DELETE, label: 'Menghapus Data' },
+  { value: AuditAction.STATUS_CHANGE, label: 'Mengubah Status' },
+  { value: AuditAction.PUBLISH, label: 'Mempublikasikan' },
+  { value: AuditAction.ARCHIVE, label: 'Mengarsipkan' },
+  { value: AuditAction.VERIFY_ANOMALY, label: 'Verifikasi Anomali' },
+];
 
 export default function HistoryPage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -114,10 +122,7 @@ function PageContent({
             placeholder="Cari berdasarkan nama dataset atau operator..."
           />
           <Select
-            options={Object.entries(ACTION_LABELS).map(([value, label]) => ({
-              value,
-              label,
-            }))}
+            options={FILTER_ACTION_OPTIONS}
             placeholder="Semua Jenis Tindakan"
             value={filterAction}
             onChange={(e) => onFilterAction(e.target.value)}

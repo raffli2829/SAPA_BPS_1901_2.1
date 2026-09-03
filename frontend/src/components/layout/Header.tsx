@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { MobileMenuButton } from './Sidebar';
-import { LogOut, ArrowLeft, Shield } from 'lucide-react';
+import { useMobileMenu } from './AppLayout';
+import { LogOut, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { ROLE_LABELS } from '@/lib/types';
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
-  onMobileMenuOpen: () => void;
+  onMobileMenuOpen?: () => void;
   actions?: React.ReactNode;
   backHref?: string;
   onBack?: () => void;
@@ -24,11 +25,14 @@ export default function Header({
   onBack,
 }: HeaderProps) {
   const { user, logout, isAuthenticated } = useAuth();
+  const mobileMenu = useMobileMenu();
+
+  const handleMobileClick = onMobileMenuOpen || mobileMenu.openMobileMenu;
 
   return (
     <header className="app-header">
       <div className="header-left">
-        <MobileMenuButton onClick={onMobileMenuOpen} />
+        <MobileMenuButton onClick={handleMobileClick} />
         {backHref ? (
           <Link href={backHref} className="header-back-btn" title="Kembali">
             <ArrowLeft size={16} />
@@ -51,10 +55,8 @@ export default function Header({
             <div className="header-user-info">
               <span className="header-user-name">{user.name}</span>
               <span className="header-user-role">
-                {user.role === 'REVIEWER' && (
-                  <Shield size={10} style={{ display: 'inline', marginRight: 3, verticalAlign: 'middle', color: '#1d4ed8' }} />
-                )}
-                {ROLE_LABELS[user.role]}
+                <CheckCircle2 size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle', color: '#10b981' }} />
+                {ROLE_LABELS[user.role] || 'Pengelola Data BPS'}
               </span>
             </div>
             <button

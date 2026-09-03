@@ -2637,3 +2637,134 @@ body {
   justify-content: space-between;
   gap: 12px;
 }
+
+/* ============================================================
+   MOBILE & HANDPHONE COMPREHENSIVE RESPONSIVE OPTIMIZATIONS
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .chatbot-layout-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Layout & Spacing */
+  .page-content {
+    padding: 16px 14px 40px !important;
+  }
+
+  .app-header {
+    padding: 0 14px !important;
+  }
+
+  .header-user-info {
+    display: none !important;
+  }
+
+  .welcome-banner {
+    padding: 20px 16px !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 16px !important;
+  }
+
+  .welcome-banner-title {
+    font-size: 20px !important;
+  }
+
+  /* Grid & Summary Cards */
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  /* Forms & Actions */
+  .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse !important;
+    width: 100% !important;
+    gap: 10px !important;
+  }
+
+  .form-actions button,
+  .form-actions a,
+  .form-actions .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Section Header & Filters */
+  .section-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 14px !important;
+  }
+
+  .filter-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  /* Tables & Scrollable containers */
+  .table-responsive,
+  .table-wrapper,
+  table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Touch-friendly inputs */
+  .text-input,
+  .select-input,
+  .textarea-input,
+  .btn {
+    min-height: 42px;
+    font-size: 14px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .app-header {
+    height: 58px !important;
+    padding: 0 12px !important;
+  }
+
+  .header-title {
+    font-size: 16px !important;
+  }
+
+  .header-subtitle {
+    display: none !important;
+  }
+
+  .page-content {
+    padding: 12px 10px 36px !important;
+  }
+
+  .section {
+    padding: 14px !important;
+  }
+
+  .welcome-banner {
+    padding: 16px 14px !important;
+  }
+
+  .welcome-banner-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
