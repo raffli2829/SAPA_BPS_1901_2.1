@@ -189,8 +189,41 @@ export const BackendApi = {
   },
 
   // Bot Status & Chat Integration
-  async getBotStatus(): Promise<{ state: string; qr: string | null; phoneNumber?: string } | null> {
-    return safeFetch<{ state: string; qr: string | null; phoneNumber?: string }>(`${BASE_URL}/api/bot/status`);
+  async getBotStatus(): Promise<{
+    state: 'connecting' | 'connected' | 'qr_ready' | 'disconnected';
+    qr: string | null;
+    phoneNumber?: string;
+    connectedAt?: string;
+    qrUpdatedAt?: number;
+    serverTime?: string;
+  } | null> {
+    return safeFetch<{
+      state: 'connecting' | 'connected' | 'qr_ready' | 'disconnected';
+      qr: string | null;
+      phoneNumber?: string;
+      connectedAt?: string;
+      qrUpdatedAt?: number;
+      serverTime?: string;
+    }>(`${BASE_URL}/api/bot/status`);
+  },
+
+  async resetBotSession(): Promise<{ success: boolean; message: string } | null> {
+    return safeFetch<{ success: boolean; message: string }>(`${BASE_URL}/api/bot/reset`, {
+      method: 'POST',
+    });
+  },
+
+  async logoutBot(): Promise<{ success: boolean; message: string } | null> {
+    return safeFetch<{ success: boolean; message: string }>(`${BASE_URL}/api/bot/logout`, {
+      method: 'POST',
+    });
+  },
+
+  async requestPairingCode(phone: string): Promise<{ success: boolean; code?: string; message?: string } | null> {
+    return safeFetch<{ success: boolean; code?: string; message?: string }>(`${BASE_URL}/api/bot/pairing-code`, {
+      method: 'POST',
+      body: JSON.stringify({ phone }),
+    });
   },
 
   async sendChatMessage(message: string): Promise<{ response: string } | null> {

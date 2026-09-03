@@ -26,6 +26,7 @@ let botStatus: {
   qr: string | null;
   phoneNumber?: string;
   connectedAt?: string;
+  qrUpdatedAt?: number;
 } = {
   state: 'disconnected',
   qr: null,
@@ -74,6 +75,7 @@ export async function resetWhatsAppAuth(): Promise<void> {
     }
     botStatus.state = 'connecting';
     botStatus.qr = null;
+    botStatus.qrUpdatedAt = undefined;
     botStatus.phoneNumber = undefined;
     console.log('[RESET] auth_info dihapus. Memulai ulang bot WhatsApp untuk QR baru...');
     setTimeout(() => {
@@ -121,6 +123,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
     if (qr) {
       botStatus.state = 'qr_ready';
       botStatus.qr = qr;
+      botStatus.qrUpdatedAt = Date.now();
       if (!hasPrintedQR) {
         hasPrintedQR = true;
         console.log('\n===========================================================');
@@ -134,6 +137,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
     if (connection === 'open') {
       botStatus.state = 'connected';
       botStatus.qr = null;
+      botStatus.qrUpdatedAt = undefined;
       hasPrintedQR = false;
       botStatus.connectedAt = new Date().toISOString();
       if (sock.user?.id) {
