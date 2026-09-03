@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef, Suspense } from 'react';
+import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
@@ -12,6 +13,7 @@ import {
   Toast,
   EmptyState,
   Modal,
+  StatusBadge,
 } from '@/components/ui';
 import {
   DatasetRepo,
@@ -27,7 +29,7 @@ import {
   ValidationError,
   AnomalyWarning,
 } from '@/lib/types';
-import { generateId, parseTabSeparated } from '@/lib/utils';
+import { generateId, parseTabSeparated, formatDateShort } from '@/lib/utils';
 import {
   Plus,
   Trash2,
@@ -39,6 +41,8 @@ import {
   FileText,
   AlertCircle,
   Sparkles,
+  Eye,
+  ExternalLink,
 } from 'lucide-react';
 
 function InputPageContent() {
@@ -283,13 +287,41 @@ function QuickForm({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null);
   const periodRef = useRef<HTMLInputElement>(null);
+
+  const [datasetRecords, setDatasetRecords] = useState<DataRecord[]>(() => {
+    try {
+      return RecordRepo.getByDataset(dataset.id).sort((a, b) => b.period.localeCompare(a.period));
+    } catch {
+      return [];
+    }
+  });
+
+  const loadRecords = useCallback(() => {
+    const recs = RecordRepo.getByDataset(dataset.id).sort((a, b) => b.period.localeCompare(a.period));
+    setDatasetRecords(recs);
+  }, [dataset.id]);
+
+  useEffect(() => {
+    const unsub = subscribe(loadRecords);
+    return unsub;
+  }, [loadRecords]);
+
+  const handleDeleteRecord = (rec: DataRecord) => {
+    if (!user) return;
+    if (confirm(`Hapus data ${rec.indicator} periode ${rec.period} (${rec.value} ${rec.unit || dataset.unit})?`)) {
+      RecordRepo.delete(rec.id, user.id, user.name);
+      setToast({ msg: `Data periode ${rec.period} berhasil dihapus.`, type: 'success' });
+      loadRecords();
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    const numValue = form.value ? parseFloat(form.value.replace(/\./g, '').replace(',', '.')) : null;
+    const numValue = form.value ? parseFloat(form.value.replace(/%/g, '').replace(/\./g, '').replace(',', '.')) : null;
 
     const recordData: Partial<DataRecord> = {
       indicator: form.indicator,
@@ -330,7 +362,7 @@ function QuickForm({
 
     setSaving(true);
     try {
-      RecordRepo.create(
+      const created = RecordRepo.create(
         {
           dataset_id: dataset.id,
           indicator: form.indicator,
@@ -347,7 +379,9 @@ function QuickForm({
         user.name
       );
 
-      setToast({ msg: `Data ${form.indicator} (${form.period}) berhasil disimpan.`, type: 'success' });
+      setLastAddedId(created.id);
+      loadRecords();
+      setToast({ msg: `Data ${form.indicator} (${form.period}: ${numValue} ${form.unit || dataset.unit}) berhasil disimpan ke draf.`, type: 'success' });
 
       setForm((prev) => ({
         ...prev,
@@ -463,6 +497,129 @@ function QuickForm({
             </Button>
           </div>
         </form>
+      </div>
+
+      {/* Review Section: Data yang Baru Saja / Sudah Ditambahkan */}
+      <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--slate-200)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div>
+            <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--slate-900)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Eye size={16} style={{ color: '#0284c7' }} />
+              Pratinjau Data yang Tersimpan ({datasetRecords.length} Data)
+            </h4>
+            <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--slate-500)' }}>
+              Riwayat entri data statistik untuk <strong>{dataset.name}</strong> ({dataset.code}). Data yang baru ditambahkan langsung muncul di baris teratas.
+            </p>
+          </div>
+          <Link href={`/datasets/${dataset.id}`}>
+            <Button variant="secondary" size="sm" icon={<ExternalLink size={13} />}>
+              Lihat di Katalog
+            </Button>
+          </Link>
+        </div>
+
+        {datasetRecords.length === 0 ? (
+          <div
+            style={{
+              padding: '24px 16px',
+              textAlign: 'center',
+              background: 'var(--slate-50)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px dashed var(--slate-300)',
+            }}
+          >
+            <FileText size={26} style={{ color: 'var(--slate-400)', margin: '0 auto 6px' }} />
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--slate-600)', fontWeight: 500 }}>
+              Belum ada baris data tersimpan untuk dataset ini
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--slate-400)' }}>
+              Isi formulir di atas dan klik <strong>Simpan & Tambah Data Berikutnya</strong> untuk menambahkan data.
+            </p>
+          </div>
+        ) : (
+          <div className="data-table-wrapper" style={{ overflowX: 'auto', maxHeight: 260 }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 140 }}>Periode / Tahun</th>
+                  <th>Nilai Angka</th>
+                  <th>Wilayah</th>
+                  <th>Status</th>
+                  <th>Waktu Input</th>
+                  <th style={{ width: 60, textAlign: 'center' }}>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {datasetRecords.map((rec, index) => {
+                  const isNewest = lastAddedId ? rec.id === lastAddedId : index === 0;
+
+                  return (
+                    <tr
+                      key={rec.id}
+                      style={{
+                        background: isNewest ? 'rgba(16, 185, 129, 0.06)' : undefined,
+                        transition: 'background 300ms ease',
+                      }}
+                    >
+                      <td style={{ fontWeight: 600, color: 'var(--slate-900)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {rec.period}
+                          {isNewest && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                background: '#ecfdf5',
+                                color: '#059669',
+                                border: '1px solid #a7f3d0',
+                                padding: '1px 6px',
+                                borderRadius: 999,
+                              }}
+                            >
+                              Baru
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ fontWeight: 700, color: 'var(--primary-700)' }}>
+                        {rec.value !== null ? rec.value.toLocaleString('id-ID') : '-'} {rec.unit || dataset.unit}
+                      </td>
+                      <td style={{ fontSize: 12.5, color: 'var(--slate-600)' }}>
+                        {rec.region}
+                      </td>
+                      <td>
+                        <StatusBadge status={rec.status} size="sm" />
+                      </td>
+                      <td style={{ fontSize: 12, color: 'var(--slate-500)' }}>
+                        {rec.created_at ? formatDateShort(rec.created_at) : 'Baru saja'}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRecord(rec)}
+                          title="Hapus data ini jika salah input"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--error-text)',
+                            cursor: 'pointer',
+                            padding: 6,
+                            borderRadius: 4,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
