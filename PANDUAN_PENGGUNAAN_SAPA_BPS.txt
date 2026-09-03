@@ -10,27 +10,40 @@ Bagian Frontend / Web Admin TIDAK dijalankan di komputer ini, melainkan
 dijalankan secara terpisah oleh rekan/teman Anda di laptopnya atau di hosting.
 
 --------------------------------------------------------------------------------
-1. CARA MENJALANKAN SERVER BACKEND
+1. CARA MENJALANKAN SERVER BACKEND (MODE HIDDEN / LATAR BELAKANG)
 --------------------------------------------------------------------------------
 
-A. CARA 1: OTOMATIS SAAT KOMPUTER DINYALAKAN (PALING MUDAH)
-   - Anda TIDAK PERLU membuka file apa pun!
-   - Begitu Anda menyalakan komputer dan login ke Windows:
-     1. Tunnel Ngrok otomatis aktif di latar belakang (tanpa jendela CMD hitam).
-     2. Watchdog auto-recovery langsung aktif memantau ngrok 24 jam.
-     3. Backend WhatsApp (Port 80) otomatis menyala.
-
-B. CARA 2: MANUAL SATU KALI KLIK
-   - Buka folder project:
-     C:\Users\Acer\Desktop\SAPA Asisten\SAPA_BPS_1901_2.1
+A. MENJALANKAN SECARA TERSEMBUNYI (HIDDEN / LATAR BELAKANG):
    - Klik dua kali file:
-     👉 START_SAPA_BPS.bat
-   - Terminal akan otomatis memastikan Ngrok dan Backend WhatsApp menyala di Port 80.
-   - CATATAN: Jangan tutup jendela terminal utama selama bot WhatsApp digunakan.
+     👉 START_SAPA_BPS_HIDDEN.vbs
+     (atau klik dua kali 👉 START_SAPA_BPS.bat)
+   - Kedua layanan (Backend WhatsApp Port 80 & Ngrok Tunnel) akan langsung
+     berjalan secara diam-diam di latar belakang Windows.
+   - TIDAK ADA JENDELA CMD yang muncul atau mengganggu layar Anda!
+   - Sebuah notifikasi Windows akan muncul di sudut kanan bawah memberitahu
+     bahwa server telah aktif.
 
-C. CARA 3: MENGONTROL NGROK SAJA SECARA MANDIRI
-   - Menyalakan Ngrok : Klik dua kali 👉 START_NGROK.bat
-   - Mematikan Ngrok  : Klik dua kali 👉 STOP_NGROK.bat
+B. MEMERIKSA STATUS SERVER:
+   - Klik dua kali file:
+     👉 STATUS_SAPA_BPS.bat
+   - Anda akan melihat ringkasan status Port 80, nomor WA yang terhubung,
+     status tunnel Ngrok, serta tombol pintas membuka Web Admin.
+
+C. MELIHAT LOG AKTIVITAS BOT SECARA REAL-TIME:
+   - Klik dua kali file:
+     👉 LIHAT_LOG_SAPA_BPS.bat
+   - Layar monitor log akan menampilkan percakapan atau aktivitas bot WA.
+   - Anda bisa menutup jendela log kapan saja dengan menekan Ctrl+C tanpa
+     menghentikan bot di latar belakang.
+
+D. MENGHENTIKAN SERVER (STOP):
+   - Klik dua kali file:
+     👉 STOP_SAPA_BPS.bat
+   - Semua layanan backend WhatsApp dan tunnel ngrok akan dihentikan seketika.
+
+E. MODE TERMINAL TERLIHAT (DEBUG MODE):
+   - Jika Anda butuh melihat jendela CMD terbuka untuk pengecekan teknis:
+     Jalankan via Command Prompt: START_SAPA_BPS.bat --visible
 
 --------------------------------------------------------------------------------
 2. DATA YANG PERLU DIBERIKAN KEPADA TEMAN ANDA (FRONTEND DEVELOPER)

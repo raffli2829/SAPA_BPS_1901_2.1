@@ -1,15 +1,27 @@
 @echo off
 title SAPA BPS - Backend WhatsApp Server dan Ngrok Tunnel
-color 0A
 cd /d "%~dp0"
+
+:: Jika tidak ada parameter --visible, jalankan secara tersembunyi (hidden) di latar belakang
+if /i not "%~1"=="--visible" if /i not "%~1"=="--debug" (
+    start "" wscript.exe "%~dp0START_SAPA_BPS_HIDDEN.vbs"
+    exit /b
+)
+
+:: ===================================================================
+:: MODE TERLIHAT (VISIBLE / DEBUG MODE)
+:: Hanya aktif jika dijalankan dengan: START_SAPA_BPS.bat --visible
+:: ===================================================================
+color 0A
 
 :: Pastikan Node.js terdaftar di PATH
 if exist "C:\Users\Acer\nodejs" (
-    set "PATH=C:\Users\Acer\nodejs;%SystemRoot%\System32\WindowsPowerShell\v1.0;%SystemRoot%\system32;%SystemRoot%;%PATH%"
+    set "PATH=C:\Users\Acer\nodejs;C:\Users\Acer\AppData\Roaming\npm;%SystemRoot%\System32\WindowsPowerShell\v1.0;%SystemRoot%\system32;%SystemRoot%;%PATH%"
 )
 
 echo ===================================================================
 echo   SAPA BPS KABUPATEN BANGKA - BACKEND WHATSAPP DAN NGROK SERVER
+echo                       (MODE DEBUG / VISIBLE)
 echo ===================================================================
 echo.
 
@@ -41,7 +53,7 @@ if %errorlevel% equ 0 (
 echo.
 
 echo [2/2] Menyiapkan Backend WhatsApp Server dan NLP Engine pada Port 80...
-start "SAPA BPS - [Backend WhatsApp dan NLP]" cmd /k "cd /d "%~dp0backend" && set "PATH=C:\Users\Acer\nodejs;%%PATH%%" && npm run dev"
+start "SAPA BPS - [Backend WhatsApp dan NLP]" cmd /k "cd /d "%~dp0backend" && set "PATH=C:\Users\Acer\nodejs;C:\Users\Acer\AppData\Roaming\npm;%%PATH%%" && npm run dev"
 
 echo Menunggu Backend siap...
 ping 127.0.0.1 -n 4 >nul
