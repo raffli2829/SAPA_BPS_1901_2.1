@@ -162,6 +162,7 @@ export interface DashboardSummary {
   total_datasets: number;
   published_records: number;
   draft_records: number;
+  draft_datasets?: number;
   pending_review: number;
 }
 

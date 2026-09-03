@@ -569,7 +569,7 @@ export default function UsersPage() {
                     </span>
                   </div>
                   <p style={{ fontSize: 11.5, color: 'var(--slate-500)', margin: 0, lineHeight: 1.4 }}>
-                    Akun ini dapat menambah, mengedit, mengimpor, memverifikasi anomali, dan mempublikasikan data statistik tanpa batasan peran terpisah.
+                    Akun ini dapat menambah, mengedit, mengimpor, memverifikasi data, dan mempublikasikan data statistik tanpa batasan peran terpisah.
                   </p>
                 </div>
               </div>

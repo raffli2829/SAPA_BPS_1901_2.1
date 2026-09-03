@@ -1,0 +1,17 @@
+{
+  "name": "sapa-bps",
+  "version": "2.1.0",
+  "private": true,
+  "description": "SAPA BPS Kabupaten Bangka - Workspace Root",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix frontend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
+    "start": "npm --prefix frontend start",
+    "start:frontend": "npm --prefix frontend start",
+    "start:backend": "npm --prefix backend start"
+  }
+}

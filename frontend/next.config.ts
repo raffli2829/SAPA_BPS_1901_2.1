@@ -8,10 +8,9 @@ const localIps = Object.values(os.networkInterfaces())
   .map((iface) => iface.address);
 
 const BACKEND_URL = (
-  process.env.BACKEND_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
   process.env.BACKEND_INTERNAL_URL ||
-  'http://localhost:80'
+  process.env.BACKEND_URL ||
+  'http://127.0.0.1:80'
 ).replace(/\/$/, '');
 
 const nextConfig: NextConfig = {

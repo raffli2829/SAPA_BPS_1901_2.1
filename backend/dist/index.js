@@ -3,7 +3,7 @@ import { createWebServer } from './web/server.js';
 import { startWhatsAppBot } from './bot/whatsapp.js';
 import { loadFAQData } from './data/csvLoader.js';
 dotenv.config();
-const INITIAL_PORT = parseInt(process.env.PORT || '8000', 10);
+const INITIAL_PORT = parseInt(process.env.PORT || '80', 10);
 async function bootstrap() {
     console.clear();
     console.log('===========================================================');

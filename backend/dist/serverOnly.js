@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import { createWebServer } from './web/server.js';
 import { loadFAQData } from './data/csvLoader.js';
 dotenv.config();
-const INITIAL_PORT = parseInt(process.env.PORT || '8000', 10);
+const INITIAL_PORT = parseInt(process.env.PORT || '80', 10);
 console.clear();
 console.log('===========================================================');
 console.log('   SAPA BPS KAB. BANGKA - [1] SERVER NLP & WEB ADMIN       ');

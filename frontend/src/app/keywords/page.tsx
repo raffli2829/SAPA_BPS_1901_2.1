@@ -7,8 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
 import Header from '@/components/layout/Header';
 import { Button, Toast, EmptyState } from '@/components/ui';
-import { ChatbotTemplateRepo, subscribe } from '@/lib/repository';
-import { ChatbotTemplate } from '@/lib/types';
+import { ChatbotTemplateRepo, DatasetRepo, subscribe } from '@/lib/repository';
+import { ChatbotTemplate, DataStatus, Dataset } from '@/lib/types';
 import { BackendApi } from '@/lib/apiClient';
 import {
   MessageSquare,
@@ -69,6 +69,10 @@ export default function KeywordsPage() {
   ]);
   const [simInput, setSimInput] = useState('');
   const [isBotTyping, setIsBotTyping] = useState(false);
+  const [simSubmenu, setSimSubmenu] = useState<{
+    category: string;
+    datasets: { id: string; name: string; code: string; response?: string }[];
+  } | null>(null);
 
   // Bot Connection Status
   const [botStatus, setBotStatus] = useState<{ state: string; phoneNumber?: string }>({ state: 'connected' });
@@ -209,30 +213,175 @@ export default function KeywordsPage() {
     if (!textToSend) setSimInput('');
     setIsBotTyping(true);
 
-    // Find match in templates
+    // Find match in templates & dynamic menu
     setTimeout(() => {
       const clean = text.trim().toLowerCase();
-      let matched = templates.find((t) => t.keyword.toLowerCase() === clean);
 
-      if (!matched) {
-        matched = templates.find(
-          (t) => clean.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(clean)
-        );
-      }
+      // Bangun daftar menu dinamis: Mengelompokkan berdasarkan Kategori dataset resmi BPS
+      const allPublishedDs = DatasetRepo.getAll().filter((d) => d.status === DataStatus.PUBLISHED);
+      const datasetTemplates = templates.filter((t) => t.source_type === 'DATASET' && t.id !== 'tpl-system-menu');
+      const seenCategories = new Set<string>();
+      let mIdx = 1;
+      const dynamicItems: { num: number; label: string; category: string; type: 'dataset' | 'service'; response?: string }[] = [];
+
+      allPublishedDs.forEach((ds) => {
+        const cat = ds.category || ds.name;
+        const lower = cat.trim().toLowerCase();
+        if (!seenCategories.has(lower)) {
+          seenCategories.add(lower);
+          const tpl = datasetTemplates.find(
+            (t) => (t.category && t.category.trim().toLowerCase() === lower) || t.keyword.trim().toLowerCase() === lower
+          );
+          dynamicItems.push({
+            num: mIdx++,
+            label: cat,
+            category: cat,
+            type: 'dataset',
+            response: tpl?.response,
+          });
+        }
+      });
+
+      const s1Num = mIdx++;
+      dynamicItems.push({
+        num: s1Num,
+        label: 'Apa saja layanan BPS?',
+        category: 'Layanan',
+        type: 'service',
+        response:
+          `🏛️ *LAYANAN RESMI BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n1. Pelayanan Statistik Terpadu (PST) & Konsultasi\n2. Rekomendasi Kegiatan Statistik (Romantik)\n3. Permintaan Data Mikro dan Publikasi Statistik Resmi\n4. Layanan Pengaduan & Informasi Publik\n\n_Ketik *petugas* untuk berbicara dengan admin PST._`,
+      });
+
+      const s2Num = mIdx++;
+      dynamicItems.push({
+        num: s2Num,
+        label: 'Hubungi Petugas PST BPS',
+        category: 'Kontak',
+        type: 'service',
+        response:
+          `🏛️ *LAYANAN KONSULTASI STATISTIK TERPADU (PST)*\n*BPS Kabupaten Bangka*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏢 *Alamat:* Jl. Ahmad Yani Jalur Dua Sungailiat\n⏰ *Jam Layanan:* Senin – Jumat (08.00 – 15.30 WIB)\n📞 *WhatsApp PST:* https://wa.me/6281234567890\n✉️ *Email:* bps1901@bps.go.id\n🌐 *Portal:* bangkakab.bps.go.id`,
+      });
+
+      const dynamicMenuStr =
+        `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
+        dynamicItems.map((it) => `${it.num}. *${it.label}*`).join('\n') +
+        `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 _Balas dengan angka *1* - *${s2Num}*, atau ketik kata kunci pertanyaan langsung._`;
 
       let reply = '';
-      if (matched) {
-        reply = matched.response;
-      } else if (clean === 'menu' || clean === 'sapa' || clean === 'halo' || clean === 'p') {
-        reply =
-          `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-          `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
-          `1️⃣ *Jumlah Penduduk*\n2️⃣ *Data Kemiskinan*\n3️⃣ *Pertumbuhan Ekonomi*\n4️⃣ *Indeks Pembangunan Manusia (IPM)*\n5️⃣ *Tenaga Kerja*\n6️⃣ *Produk Domestik Regional Bruto (PDRB)*\n🔟 *Hubungi Petugas PST BPS*\n\n` +
-          `💡 _Balas dengan angka atau ketik kata kunci pertanyaan langsung._`;
-      } else {
-        reply =
-          `Mohon maaf, kata kunci *"${text}"* belum terdaftar dalam template cepat kami.\n\n` +
-          `💡 _Ketik *menu* untuk melihat topik data resmi BPS Kab. Bangka, atau hubungi petugas PST kami._`;
+
+      // 1. Jika pengguna sedang berada di dalam Sub-menu pemilihan dataset rinci
+      if (simSubmenu) {
+        if (['menu', 'batal', 'kembali', 'exit', 'keluar', 'p'].includes(clean)) {
+          setSimSubmenu(null);
+          reply = dynamicMenuStr;
+        } else if (/^\d+$/.test(clean)) {
+          const subNum = parseInt(clean, 10);
+          if (subNum >= 1 && subNum <= simSubmenu.datasets.length) {
+            const chosen = simSubmenu.datasets[subNum - 1];
+            setSimSubmenu(null);
+            const foundTpl = templates.find((t) => t.dataset_id === chosen.id || t.keyword.toLowerCase() === chosen.name.toLowerCase());
+            reply = foundTpl ? foundTpl.response : chosen.response || `📊 *DATA: ${chosen.name}* (${chosen.code})`;
+          } else {
+            reply =
+              `⚠️ Pilihan nomor *${subNum}* tidak tersedia.\n\n` +
+              `Silakan balas dengan angka *1* - *${simSubmenu.datasets.length}*, atau ketik *menu* untuk kembali ke Menu Utama.`;
+          }
+        } else {
+          setSimSubmenu(null);
+        }
+      }
+
+      // 2. Jika tidak dalam submenu
+      if (!reply) {
+        if (/^\d+$/.test(clean)) {
+          const num = parseInt(clean, 10);
+          const item = dynamicItems.find((d) => d.num === num);
+          if (item) {
+            if (item.type === 'service') {
+              reply = item.response || '';
+            } else {
+              // Cek apakah ada lebih dari 1 dataset dalam kategori ini
+              const catLower = item.category.trim().toLowerCase();
+              const matchedDatasets = allPublishedDs.filter((d) => {
+                const dCat = (d.category || '').trim().toLowerCase();
+                return dCat === catLower;
+              });
+
+              if (matchedDatasets.length > 1) {
+                const subDs = matchedDatasets.map((d) => {
+                  const tpl = datasetTemplates.find((t) => t.dataset_id === d.id);
+                  return {
+                    id: d.id,
+                    name: d.name,
+                    code: d.code,
+                    response: tpl?.response,
+                  };
+                });
+                setSimSubmenu({ category: item.label, datasets: subDs });
+                const lines = subDs.map((d, i) => `${i + 1}. *${d.name}* (${d.code})`);
+                reply =
+                  `📊 *PILIHAN DATASET: ${item.label.toUpperCase()}*\n` +
+                  `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                  `Terdapat *${subDs.length} dataset statistik resmi* dalam kategori ini. Silakan balas dengan nomor dataset yang ingin Anda lihat lebih rinci:\n\n` +
+                  lines.join('\n') +
+                  `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                  `💡 _Balas dengan angka *1* - *${subDs.length}*, atau ketik *menu* untuk kembali ke Menu Utama._`;
+              } else {
+                const singleDs = matchedDatasets[0];
+                const tpl = singleDs ? datasetTemplates.find((t) => t.dataset_id === singleDs.id) : null;
+                reply = tpl?.response || item.response || '';
+              }
+            }
+          } else {
+            reply = `Maaf, pilihan nomor *${num}* belum tersedia.\n\n${dynamicMenuStr}`;
+          }
+        } else if (clean === 'menu' || clean === 'sapa' || clean === 'halo' || clean === 'p') {
+          reply = dynamicMenuStr;
+        } else {
+          // Cek apakah kata kunci mengetik nama kategori yang memiliki > 1 dataset
+          const matchedCategoryDs: Dataset[] = allPublishedDs.filter(
+            (d: Dataset) => (d.category && d.category.trim().toLowerCase() === clean) || clean.includes((d.category || '').toLowerCase())
+          );
+          const uniqueCats: string[] = Array.from(new Set(matchedCategoryDs.map((d: Dataset) => d.category)));
+          if (uniqueCats.length === 1 && matchedCategoryDs.length > 1) {
+            const catName = uniqueCats[0];
+            const subDs = matchedCategoryDs.map((d: Dataset) => {
+              const tpl = datasetTemplates.find((t) => t.dataset_id === d.id);
+              return {
+                id: d.id,
+                name: d.name,
+                code: d.code,
+                response: tpl?.response,
+              };
+            });
+            setSimSubmenu({ category: catName, datasets: subDs });
+            const lines = subDs.map((d, i: number) => `${i + 1}. *${d.name}* (${d.code})`);
+            reply =
+              `📊 *PILIHAN DATASET: ${catName.toUpperCase()}*\n` +
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `Terdapat *${subDs.length} dataset statistik resmi* dalam kategori ini. Silakan balas dengan nomor dataset yang ingin Anda lihat lebih rinci:\n\n` +
+              lines.join('\n') +
+              `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `💡 _Balas dengan angka *1* - *${subDs.length}*, atau ketik *menu* untuk kembali ke Menu Utama._`;
+          } else {
+            let matched = templates.find((t) => t.keyword.toLowerCase() === clean);
+            if (!matched) {
+              matched = templates.find(
+                (t) => clean.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(clean)
+              );
+            }
+
+            if (matched) {
+              reply = matched.response;
+            } else {
+              reply =
+                `Mohon maaf, kata kunci *"${text}"* belum terdaftar dalam template cepat kami.\n\n` +
+                `💡 _Ketik *menu* untuk melihat daftar topik data resmi BPS Kab. Bangka, atau ketik *petugas* untuk konsultasi PST._`;
+            }
+          }
+        }
       }
 
       setSimMessages((prev) => [...prev, { sender: 'bot', text: reply, time: timeStr }]);

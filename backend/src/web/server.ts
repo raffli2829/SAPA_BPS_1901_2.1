@@ -660,8 +660,8 @@ export function createWebServer(): express.Express {
     });
   });
 
-  // POST /api/bot/reset - Memaksa pembersihan sesi lama dan memicu QR baru (Diproteksi API Key jika diset)
-  app.post('/api/bot/reset', requireApiKey, async (req: Request, res: Response) => {
+  // POST /api/bot/reset - Memaksa pembersihan sesi lama dan memicu QR baru
+  app.post('/api/bot/reset', async (req: Request, res: Response) => {
     try {
       await resetWhatsAppAuth();
       res.json({ success: true, message: 'Sesi WhatsApp berhasil direset. Silakan tunggu QR code baru.' });
@@ -670,8 +670,18 @@ export function createWebServer(): express.Express {
     }
   });
 
+  // POST /api/bot/logout - Memutuskan sambungan host dan memicu QR baru untuk login ulang
+  app.post('/api/bot/logout', async (req: Request, res: Response) => {
+    try {
+      await resetWhatsAppAuth();
+      res.json({ success: true, message: 'Sambungan host berhasil diputuskan. Menyiapkan QR code baru...' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err?.message || 'Gagal logout' });
+    }
+  });
+
   // POST /api/bot/pairing-code - Meminta kode 8-digit untuk login tanpa scan kamera
-  app.post('/api/bot/pairing-code', requireApiKey, async (req: Request, res: Response) => {
+  app.post('/api/bot/pairing-code', async (req: Request, res: Response) => {
     const { phone } = req.body;
     if (!phone) {
       res.status(400).json({ success: false, message: 'Nomor telepon wajib diisi' });
@@ -694,11 +704,12 @@ export function createWebServer(): express.Express {
   // POST /api/chat & /chat
   const handleChat = async (req: Request, res: Response) => {
     const message = req.body.message || '';
+    const sessionId = req.body.sessionId || String(req.ip || 'web-client');
     if (!message.trim()) {
       res.json({ success: false, response: 'Silakan ketik pertanyaan atau topik statistik resmi BPS.' });
       return;
     }
-    const reply = await processUserMessage(message);
+    const reply = await processUserMessage(message, undefined, sessionId);
     res.json({ success: true, response: reply });
   };
 
@@ -707,7 +718,8 @@ export function createWebServer(): express.Express {
 
   app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     const message = req.body.message || '';
-    const reply = await processUserMessage(message);
+    const sessionId = req.body.sessionId || String(req.ip || 'webhook-client');
+    const reply = await processUserMessage(message, undefined, sessionId);
     res.json({ status: 'success', response: reply });
   });
 

@@ -15,6 +15,7 @@ import {
   Toast,
   TableSkeleton,
 } from '@/components/ui';
+import EditDatasetModal from '@/components/datasets/EditDatasetModal';
 import {
   DatasetRepo,
   RecordRepo,
@@ -39,6 +40,7 @@ import {
   Archive,
   ArrowLeft,
   Trash2,
+  RotateCcw,
   Database,
   Layers,
   MapPin,
@@ -89,6 +91,7 @@ export default function DatasetDetailPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [editingRecord, setEditingRecord] = useState<DataRecord | null>(null);
+  const [isEditingDataset, setIsEditingDataset] = useState(false);
 
   const loadData = useCallback(() => {
     const ds = DatasetRepo.getById(datasetId);
@@ -165,6 +168,16 @@ export default function DatasetDetailPage() {
     setEditingRecord(null);
   };
 
+  const handleDeleteDataset = () => {
+    if (!user || !dataset) return;
+    try {
+      DatasetRepo.delete(dataset.id, user.id, user.name);
+      router.push('/datasets');
+    } catch {
+      setToast({ msg: 'Gagal menghapus dataset.', type: 'error' });
+    }
+  };
+
   if (isLoading || !isAuthenticated) return null;
 
   return (
@@ -180,9 +193,26 @@ export default function DatasetDetailPage() {
         onStatusChange={handleStatusChange}
         onDeleteRecord={handleDeleteRecord}
         onEditRecord={(rec) => setEditingRecord(rec)}
+        onEditDataset={() => setIsEditingDataset(true)}
         confirmAction={confirmAction}
         setConfirmAction={setConfirmAction}
+        onDeleteDataset={handleDeleteDataset}
       />
+      {isEditingDataset && dataset && (
+        <EditDatasetModal
+          dataset={dataset}
+          open={isEditingDataset}
+          onClose={() => setIsEditingDataset(false)}
+          onSuccess={(updated) => {
+            setDataset(updated);
+            setToast({
+              msg: `Dataset "${updated.name}" berhasil diperbarui.`,
+              type: 'success',
+            });
+            loadData();
+          }}
+        />
+      )}
       {editingRecord && dataset && (
         <EditRecordModal
           record={editingRecord}
@@ -235,8 +265,10 @@ function PageContent({
   onStatusChange,
   onDeleteRecord,
   onEditRecord,
+  onEditDataset,
   confirmAction,
   setConfirmAction,
+  onDeleteDataset,
   onMobileMenuOpen,
 }: {
   dataset: Dataset | null;
@@ -249,8 +281,10 @@ function PageContent({
   onStatusChange: (status: DataStatus, reason?: string) => void;
   onDeleteRecord: (id: string) => void;
   onEditRecord: (rec: DataRecord) => void;
+  onEditDataset: () => void;
   confirmAction: ConfirmAction | null;
   setConfirmAction: (action: ConfirmAction | null) => void;
+  onDeleteDataset: () => void;
   onMobileMenuOpen?: () => void;
 }) {
   if (loading) {
@@ -294,6 +328,17 @@ function PageContent({
 
   const actionButtons = (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {/* Tombol Edit Dataset selalu dapat diakses untuk mengubah metadata/spesifikasi */}
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={<Pencil size={14} />}
+        onClick={onEditDataset}
+        title="Ubah spesifikasi, nama, atau kategori dataset"
+      >
+        Edit Dataset
+      </Button>
+
       {dataset.status === DataStatus.DRAFT && (
         <>
           <Link href={`/input?dataset=${dataset.id}`}>
@@ -383,6 +428,65 @@ function PageContent({
           </Button>
         </>
       )}
+
+      {/* Jika status saat ini adalah DIARSIPKAN (ARCHIVED), sediakan opsi Publikasikan Ulang & Pulihkan ke Draf */}
+      {dataset.status === DataStatus.ARCHIVED && (
+        <>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<CheckCircle size={14} />}
+            onClick={() =>
+              setConfirmAction({
+                title: 'Publikasikan Ulang Dataset?',
+                description:
+                  'Dataset ini akan diaktifkan kembali dari arsip dan langsung dipublikasikan ke katalog serta layanan chatbot SAPA BPS.',
+                action: () => onStatusChange(DataStatus.PUBLISHED),
+                variant: 'default',
+                confirmLabel: 'Publikasikan Ulang',
+              })
+            }
+          >
+            Publikasikan Ulang
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RotateCcw size={14} />}
+            onClick={() =>
+              setConfirmAction({
+                title: 'Pulihkan ke Status Draf?',
+                description:
+                  'Dataset akan dikembalikan ke status draf sehingga Anda dapat memperbarui data atau mengeditnya terlebih dahulu sebelum dipublikasikan.',
+                action: () => onStatusChange(DataStatus.DRAFT, 'Dipulihkan dari arsip'),
+                variant: 'default',
+                confirmLabel: 'Pulihkan ke Draf',
+              })
+            }
+          >
+            Pulihkan ke Draf
+          </Button>
+        </>
+      )}
+
+      {/* Opsi Hapus Dataset jika salah buat */}
+      <Button
+        variant="danger"
+        size="sm"
+        icon={<Trash2 size={14} />}
+        onClick={() =>
+          setConfirmAction({
+            title: `Hapus Dataset "${dataset.name}"?`,
+            description:
+              'Dataset ini beserta seluruh baris datanya akan dihapus dari sistem. Gunakan opsi ini jika Anda salah membuat dataset.',
+            action: onDeleteDataset,
+            variant: 'danger',
+            confirmLabel: 'Hapus Dataset',
+          })
+        }
+      >
+        Hapus Dataset
+      </Button>
     </div>
   );
 
@@ -485,7 +589,9 @@ function PageContent({
               setConfirmAction={setConfirmAction}
             />
           )}
-          {activeTab === 'metadata' && <MetadataTab dataset={dataset} />}
+          {activeTab === 'metadata' && (
+            <MetadataTab dataset={dataset} onOpenEditDataset={onEditDataset} />
+          )}
           {activeTab === 'history' && <HistoryTab logs={auditLogs} />}
         </div>
       </div>
@@ -603,9 +709,45 @@ function DataTab({
 }
 
 // --- Metadata Tab ---
-function MetadataTab({ dataset }: { dataset: Dataset }) {
+function MetadataTab({
+  dataset,
+  onOpenEditDataset,
+}: {
+  dataset: Dataset;
+  onOpenEditDataset?: () => void;
+}) {
   return (
     <div className="section">
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '16px 20px',
+          borderBottom: '1px solid var(--slate-200)',
+          flexWrap: 'wrap',
+          gap: 12,
+        }}
+      >
+        <div>
+          <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+            Spesifikasi & Informasi Metadata
+          </h4>
+          <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#64748b' }}>
+            Detail teknis, definisi operasional, dan parameter statistik data makro
+          </p>
+        </div>
+        {onOpenEditDataset && (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Pencil size={13} />}
+            onClick={onOpenEditDataset}
+          >
+            Edit Metadata
+          </Button>
+        )}
+      </div>
       <div className="section-body">
         <div className="metadata-grid">
           <div className="metadata-item">
@@ -668,7 +810,7 @@ function HistoryTab({ logs }: { logs: AuditLog[] }) {
     [AuditAction.REJECT]: 'Menolak',
     [AuditAction.PUBLISH]: 'Mempublikasikan',
     [AuditAction.ARCHIVE]: 'Mengarsipkan',
-    [AuditAction.VERIFY_ANOMALY]: 'Verifikasi Anomali',
+    [AuditAction.VERIFY_ANOMALY]: 'Verifikasi Data',
   };
 
   if (logs.length === 0) {

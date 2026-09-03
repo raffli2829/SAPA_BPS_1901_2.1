@@ -417,31 +417,26 @@ export const DatasetRepo = {
 
   delete(id: string, userId: string, userName: string): boolean {
     const s = getStore();
-    const dataset = s.datasets.find((d) => d.id === id);
-    if (!dataset) return false;
+    const index = s.datasets.findIndex((d) => d.id === id);
+    if (index === -1) return false;
 
-    // Soft delete: archive
-    dataset.status = DataStatus.ARCHIVED;
-    dataset.updated_by = userId;
-    dataset.updated_at = new Date().toISOString();
+    const dataset = s.datasets[index];
 
-    // Soft delete records
-    s.records
-      .filter((r) => r.dataset_id === id)
-      .forEach((r) => {
-        r.is_deleted = true;
-        r.updated_by = userId;
-        r.updated_at = new Date().toISOString();
-      });
+    // Hapus total dataset dari daftar agar tidak muncul di katalog jika salah buat
+    s.datasets.splice(index, 1);
+
+    // Hapus seluruh data record terkait dataset ini
+    s.records = s.records.filter((r) => r.dataset_id !== id);
 
     AuditRepo.log({
       entity_type: 'dataset',
       entity_id: id,
       entity_name: dataset.name,
       action: AuditAction.ARCHIVE,
-      changes: [],
+      changes: [{ field: 'dataset', old_value: dataset.name, new_value: null }],
       user_id: userId,
       user_name: userName,
+      reason: 'Dataset dihapus oleh pengguna karena salah buat',
     });
 
     BackendApi.deleteDataset(id).catch(() => {});
@@ -719,7 +714,7 @@ export const RecordRepo = {
       changes: [{ field: 'notes', old_value: '', new_value: record.notes }],
       user_id: userId,
       user_name: userName,
-      reason: customNote || 'Data anomali/lonjakan telah diverifikasi dan disetujui sebagai data valid lapangan.',
+      reason: customNote || 'Data telah diverifikasi dan disetujui sebagai data valid lapangan.',
     });
 
     BackendApi.updateRecord(record.id, record).catch(() => {});
@@ -934,19 +929,50 @@ export const UserRepo = {
 export function getDashboardSummary(): DashboardSummary {
   const datasets = DatasetRepo.getAll();
   const records = getStore().records.filter((r) => !r.is_deleted);
-  const pendingReviews = ReviewRepo.getPending();
+
+  // Hitung jumlah data yang memerlukan verifikasi lapangan (fluktuasi tajam yang belum dikonfirmasi)
+  const activeDatasets = datasets.filter((d) => d.status !== DataStatus.ARCHIVED);
+  let pendingVerifikasiCount = 0;
+  activeDatasets.forEach((ds) => {
+    const dsRecords = records
+      .filter((r) => r.dataset_id === ds.id && r.value !== null && !isNaN(r.value))
+      .sort((a, b) => a.period.localeCompare(b.period));
+
+    const groups = new Map<string, DataRecord[]>();
+    dsRecords.forEach((r) => {
+      const key = `${r.indicator}|${r.region}`;
+      const existing = groups.get(key) || [];
+      existing.push(r);
+      groups.set(key, existing);
+    });
+
+    groups.forEach((groupRecords) => {
+      for (let i = 1; i < groupRecords.length; i++) {
+        const prev = groupRecords[i - 1];
+        const curr = groupRecords[i];
+        if (prev.value !== null && curr.value !== null && prev.value !== 0) {
+          const diff = curr.value - prev.value;
+          const changePercent = (diff / Math.abs(prev.value)) * 100;
+          if (Math.abs(changePercent) >= 25) {
+            const isConfirmed = curr.notes?.includes('[Dikonfirmasi Valid]') || false;
+            if (!isConfirmed) pendingVerifikasiCount++;
+          }
+        }
+      }
+    });
+  });
+
+  const draftDatasetsCount = datasets.filter((d) => d.status === DataStatus.DRAFT).length;
+  const draftRecordsCount = records.filter((r) => r.status === DataStatus.DRAFT).length;
 
   return {
-    total_datasets: datasets.filter(
-      (d) => d.status !== DataStatus.ARCHIVED
-    ).length,
+    total_datasets: activeDatasets.length,
     published_records: records.filter(
       (r) => r.status === DataStatus.PUBLISHED
     ).length,
-    draft_records: records.filter(
-      (r) => r.status === DataStatus.DRAFT
-    ).length,
-    pending_review: pendingReviews.length,
+    draft_records: draftRecordsCount,
+    draft_datasets: draftDatasetsCount,
+    pending_review: pendingVerifikasiCount,
   };
 }
 
@@ -1169,11 +1195,19 @@ export const ChatbotTemplateRepo = {
       source_type: 'MANUAL' as const,
     }));
 
-    // Auto-generate template dari dataset yang ada di pangkalan data BPS (Read-only / Preview saja)
-    const datasetTemplates: ChatbotTemplate[] = DatasetRepo.getAll().map((ds) => {
-      const records = getStore()
-        .records.filter((r) => r.dataset_id === ds.id && !r.is_deleted && r.value !== null)
-        .sort((a, b) => b.period.localeCompare(a.period));
+    // Auto-generate template dari dataset yang ada di pangkalan data BPS (HANYA DATASET YANG SUDAH BERSTATUS PUBLISHED!)
+    const datasetTemplates: ChatbotTemplate[] = DatasetRepo.getAll()
+      .filter((ds) => ds.status === DataStatus.PUBLISHED)
+      .map((ds) => {
+        const records = getStore()
+          .records.filter(
+            (r) =>
+              r.dataset_id === ds.id &&
+              !r.is_deleted &&
+              r.value !== null &&
+              r.status === DataStatus.PUBLISHED
+          )
+          .sort((a, b) => b.period.localeCompare(a.period));
 
       let dataSummary = '';
       if (records.length > 0) {
@@ -1211,7 +1245,42 @@ export const ChatbotTemplateRepo = {
       };
     });
 
-    return [...datasetTemplates, ...manualList];
+    // Template Dinamis Menu Utama (Menyusun semua dataset terbitan + 2 opsi layanan selalu di nomor terbawah)
+    const publishedDs = DatasetRepo.getAll().filter((d) => d.status === DataStatus.PUBLISHED);
+    const seenCategories = new Set<string>();
+    const mLines: string[] = [];
+    let mNum = 1;
+
+    publishedDs.forEach((ds) => {
+      const label = ds.category || ds.name;
+      const lower = label.trim().toLowerCase();
+      if (!seenCategories.has(lower)) {
+        seenCategories.add(lower);
+        mLines.push(`${mNum++}. *${label}*`);
+      }
+    });
+
+    const s1 = mNum++;
+    const s2 = mNum++;
+    mLines.push(`${s1}. *Apa saja layanan BPS?*`);
+    mLines.push(`${s2}. *Hubungi Petugas PST BPS*`);
+
+    const dynamicMenuTemplate: ChatbotTemplate = {
+      id: 'tpl-system-menu',
+      keyword: 'Menu Utama',
+      response:
+        `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
+        mLines.join('\n') +
+        `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 _Balas dengan angka *1* - *${s2}*, ketik pertanyaan langsung, atau ketik *petugas* untuk konsultasi PST._`,
+      category: 'Layanan & Kontak',
+      source_type: 'DATASET',
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    };
+
+    return [dynamicMenuTemplate, ...datasetTemplates, ...manualList];
   },
 
   getById(id: string): ChatbotTemplate | undefined {

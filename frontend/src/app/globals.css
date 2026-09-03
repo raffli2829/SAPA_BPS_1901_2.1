@@ -2645,44 +2645,120 @@ body {
 @media (max-width: 900px) {
   .chatbot-layout-grid {
     grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+
+  .chatbot-layout-grid > div:last-child {
+    position: static !important;
+    top: auto !important;
   }
 }
 
 @media (max-width: 768px) {
-  /* Layout & Spacing */
-  .page-content {
-    padding: 16px 14px 40px !important;
+  /* Layout & Viewport */
+  body, html {
+    overflow-x: hidden;
   }
 
+  .app-main-expanded,
+  .app-main-collapsed {
+    margin-left: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .page-content {
+    padding: 14px 12px 48px !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Header on Mobile */
   .app-header {
-    padding: 0 14px !important;
+    height: auto !important;
+    min-height: 56px !important;
+    padding: 8px 12px !important;
+    gap: 10px !important;
+  }
+
+  .header-left {
+    gap: 8px !important;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .header-title {
+    font-size: 15px !important;
+  }
+
+  .header-subtitle {
+    display: none !important;
+  }
+
+  .header-right {
+    gap: 6px !important;
+    flex-shrink: 0;
   }
 
   .header-user-info {
     display: none !important;
   }
 
+  .header-user {
+    padding: 2px !important;
+    background: transparent !important;
+    border: none !important;
+  }
+
+  /* Sidebar Drawer on Mobile */
+  .sidebar-mobile {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    width: 280px !important;
+    max-width: 85vw !important;
+    z-index: 100 !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .sidebar-overlay {
+    display: block !important;
+    z-index: 95 !important;
+  }
+
+  .mobile-menu-btn {
+    display: flex !important;
+  }
+
+  .sidebar-collapse-btn {
+    display: none !important;
+  }
+
+  /* Welcome Banner */
   .welcome-banner {
-    padding: 20px 16px !important;
+    padding: 18px 14px !important;
     flex-direction: column !important;
     align-items: flex-start !important;
-    gap: 16px !important;
+    gap: 14px !important;
   }
 
   .welcome-banner-title {
-    font-size: 20px !important;
+    font-size: 19px !important;
   }
 
-  /* Grid & Summary Cards */
+  /* Summary & Metric Cards */
   .summary-grid {
     grid-template-columns: repeat(2, 1fr) !important;
-    gap: 12px !important;
+    gap: 10px !important;
   }
 
   /* Forms & Actions */
-  .form-grid {
+  .form-grid,
+  .form-row {
     grid-template-columns: 1fr !important;
-    gap: 14px !important;
+    gap: 12px !important;
   }
 
   .form-actions {
@@ -2701,24 +2777,84 @@ body {
   /* Section Header & Filters */
   .section-header {
     flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 14px !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .section-title {
+    font-size: 15px !important;
+  }
+
+  .section-subtitle {
+    font-size: 12px !important;
   }
 
   .filter-bar {
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 10px !important;
+    gap: 8px !important;
   }
 
-  /* Tables & Scrollable containers */
+  .filter-bar > * {
+    width: 100% !important;
+  }
+
+  /* Data Table Horizontal Scroll Container */
+  .data-table-wrapper,
   .table-responsive,
-  .table-wrapper,
-  table {
-    display: block;
-    width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  .table-wrapper {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: var(--radius-lg);
+  }
+
+  .data-table {
+    min-width: 600px !important;
+  }
+
+  /* Modals on Mobile as Bottom Sheet */
+  .modal-overlay {
+    padding: 10px !important;
+    align-items: flex-end !important;
+  }
+
+  .modal {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 85dvh !important;
+    overflow-y: auto !important;
+    padding: 20px 16px !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+  }
+
+  .modal-actions button,
+  .modal-actions .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Detail Dataset Page on Mobile */
+  .detail-header {
+    padding: 16px 14px !important;
+  }
+
+  .detail-header-top {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .detail-meta-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
   }
 
   /* Touch-friendly inputs */
@@ -2736,29 +2872,16 @@ body {
     grid-template-columns: 1fr !important;
   }
 
-  .app-header {
-    height: 58px !important;
-    padding: 0 12px !important;
-  }
-
-  .header-title {
-    font-size: 16px !important;
-  }
-
-  .header-subtitle {
-    display: none !important;
-  }
-
   .page-content {
-    padding: 12px 10px 36px !important;
+    padding: 10px 8px 36px !important;
   }
 
   .section {
-    padding: 14px !important;
+    padding: 12px !important;
   }
 
   .welcome-banner {
-    padding: 16px 14px !important;
+    padding: 14px 12px !important;
   }
 
   .welcome-banner-meta {

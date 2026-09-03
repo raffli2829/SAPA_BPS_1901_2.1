@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   Sparkles,
+  QrCode,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,6 +54,7 @@ export default function Sidebar({
     { label: 'Input Data', href: '/input', icon: <PenLine size={18} />, group: 'DATA STATISTIK' },
     { label: 'Import Excel / CSV', href: '/import', icon: <Upload size={18} />, group: 'DATA STATISTIK' },
     { label: 'Template Chatbot', href: '/keywords', icon: <MessageSquare size={18} />, group: 'CHATBOT & LAYANAN' },
+    { label: 'Koneksi Host WA', href: '/whatsapp', icon: <QrCode size={18} />, group: 'CHATBOT & LAYANAN' },
     { label: 'Verifikasi Data', href: '/issues', icon: <ShieldCheck size={18} />, group: 'KUALITAS & VALIDASI' },
     { label: 'Riwayat Audit', href: '/history', icon: <History size={18} />, group: 'SISTEM & RIWAYAT' },
     { label: 'Kamus Metadata', href: '/metadata', icon: <FileText size={18} />, group: 'SISTEM & RIWAYAT' },
