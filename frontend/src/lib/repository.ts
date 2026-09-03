@@ -1119,6 +1119,16 @@ const DEFAULT_TEMPLATES: ChatbotTemplate[] = [
 
 let cachedTemplates: ChatbotTemplate[] | null = null;
 
+function detectFaqCategory(keyword: string): string {
+  const k = keyword.toLowerCase();
+  if (k.includes('pdrb') || k.includes('ekonomi') || k.includes('inflasi')) return 'Ekonomi Makro';
+  if (k.includes('ipg') || k.includes('ipm') || k.includes('gender') || k.includes('indeks')) return 'Indikator Makro';
+  if (k.includes('pendidikan') || k.includes('rls') || k.includes('hls') || k.includes('sekolah')) return 'Pendidikan & Sosial';
+  if (k.includes('penduduk') || k.includes('kemiskinan') || k.includes('kerja')) return 'Sosial & Kependudukan';
+  if (k.includes('layanan') || k.includes('kontak') || k.includes('petugas') || k.includes('pst') || k.includes('alamat')) return 'Layanan & Kontak';
+  return 'Layanan & FAQ BPS';
+}
+
 function getCachedTemplates(): ChatbotTemplate[] {
   if (cachedTemplates) return cachedTemplates;
   if (typeof window !== 'undefined') {
@@ -1127,6 +1137,12 @@ function getCachedTemplates(): ChatbotTemplate[] {
       if (saved) {
         cachedTemplates = JSON.parse(saved);
         if (cachedTemplates && cachedTemplates.length > 0) {
+          cachedTemplates = cachedTemplates.map((t) => {
+            if (!t.category || t.category === 'Resmi BPS') {
+              return { ...t, category: detectFaqCategory(t.keyword) };
+            }
+            return t;
+          });
           return cachedTemplates;
         }
       }
@@ -1210,7 +1226,7 @@ export const ChatbotTemplateRepo = {
           id: `tpl-remote-${i}`,
           keyword: f.pertanyaan,
           response: f.jawaban.replace(/<br\s*\/?>/gi, '\n'),
-          category: 'Resmi BPS',
+          category: detectFaqCategory(f.pertanyaan),
           source_type: 'MANUAL',
           is_active: true,
           updated_at: new Date().toISOString(),

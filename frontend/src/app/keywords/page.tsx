@@ -97,9 +97,17 @@ export default function KeywordsPage() {
     return unsub;
   }, [isAuthenticated, isLoading, router]);
 
-  // Categories list
+  // Helper untuk membersihkan label 'Resmi BPS' menjadi 'Layanan & FAQ BPS'
+  const getCleanCategory = (cat?: string) => {
+    if (!cat || cat === 'Resmi BPS') return 'Layanan & FAQ BPS';
+    return cat;
+  };
+
+  // Categories list (Menggantikan 'Resmi BPS' secara konsisten)
   const categories = useMemo(() => {
-    const set = new Set(templates.map((t) => t.category || 'Umum'));
+    const set = new Set(
+      templates.map((t) => getCleanCategory(t.category))
+    );
     return ['ALL', ...Array.from(set)];
   }, [templates]);
 
@@ -117,7 +125,8 @@ export default function KeywordsPage() {
         selectedSource === 'ALL' ||
         (selectedSource === 'DATASET' && t.source_type === 'DATASET') ||
         (selectedSource === 'MANUAL' && t.source_type === 'MANUAL');
-      const matchCat = selectedCategory === 'ALL' || t.category === selectedCategory;
+      const cleanCategory = getCleanCategory(t.category);
+      const matchCat = selectedCategory === 'ALL' || cleanCategory === selectedCategory;
       return matchSearch && matchSource && matchCat;
     });
   }, [templates, search, selectedSource, selectedCategory]);
@@ -434,7 +443,7 @@ export default function KeywordsPage() {
           {/* Left Column: Template List */}
           <div>
             <div className="section" style={{ marginBottom: 0 }}>
-              <div className="section-header" style={{ flexWrap: 'wrap', gap: 12 }}>
+              <div className="section-header" style={{ flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="section-title">
                     <Hash size={18} style={{ color: 'var(--primary-600)' }} />
@@ -444,6 +453,14 @@ export default function KeywordsPage() {
                     Kategorisasi keyword pemicu chat. Template dari dataset resmi terlindungi dan dapat di-preview.
                   </p>
                 </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<Plus size={14} />}
+                  onClick={() => handleOpenModal()}
+                >
+                  Tambah Template Baru
+                </Button>
               </div>
 
               <div className="section-body">
@@ -538,7 +555,7 @@ export default function KeywordsPage() {
                       {categories
                         .filter((cat) => cat !== 'ALL')
                         .map((cat) => {
-                          const count = templates.filter((t) => t.category === cat).length;
+                          const count = templates.filter((t) => getCleanCategory(t.category) === cat).length;
                           return (
                             <option key={cat} value={cat}>
                               {cat} ({count})
@@ -642,7 +659,7 @@ export default function KeywordsPage() {
                                       border: '1px solid var(--slate-200)',
                                     }}
                                   >
-                                    {tpl.category}
+                                    {getCleanCategory(tpl.category)}
                                   </span>
                                 )}
                               </div>
@@ -1054,11 +1071,37 @@ export default function KeywordsPage() {
                   <input
                     id="cat"
                     type="text"
+                    list="category-suggestions"
                     className="text-input"
-                    placeholder="Contoh: Layanan PST, Informasi Umum, FAQ"
+                    placeholder="Pilih atau ketik kategori baru (contoh: Layanan & Kontak, Ekonomi Makro)"
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value)}
                   />
+                  <datalist id="category-suggestions">
+                    {categories.filter((c) => c !== 'ALL').map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                    {['Layanan & Kontak', 'Ekonomi Makro', 'Sosial & Kependudukan', 'Indikator Makro', 'Informasi Umum'].map((quickCat) => (
+                      <button
+                        key={quickCat}
+                        type="button"
+                        onClick={() => setFormCategory(quickCat)}
+                        style={{
+                          fontSize: 11,
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          border: formCategory === quickCat ? '1px solid var(--primary-600)' : '1px solid var(--slate-200)',
+                          background: formCategory === quickCat ? 'var(--primary-50)' : '#ffffff',
+                          color: formCategory === quickCat ? 'var(--primary-700)' : 'var(--slate-600)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {quickCat}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
