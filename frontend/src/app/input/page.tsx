@@ -54,6 +54,7 @@ function InputPageContent() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [selectedDatasetId, setSelectedDatasetId] = useState(preselectedDataset || '');
   const [mode, setMode] = useState<InputMode>('form');
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [anomalyWarning, setAnomalyWarning] = useState<AnomalyWarning | null>(null);
 
@@ -135,6 +136,8 @@ function PageContent({
   setAnomalyWarning: (w: AnomalyWarning | null) => void;
   onMobileMenuOpen?: () => void;
 }) {
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+
   return (
     <>
       <Header
@@ -214,6 +217,7 @@ function PageContent({
                 user={user}
                 setToast={setToast}
                 setAnomalyWarning={setAnomalyWarning}
+                onRecordAdded={(id) => setLastAddedId(id)}
               />
             ) : (
               <SpreadsheetEditor
@@ -223,6 +227,15 @@ function PageContent({
                 setToast={setToast}
               />
             )}
+
+            {/* KARTU DEDIKASI PREVIEW & RIWAYAT DATA TERSIMPAN */}
+            <DatasetRecordsReview
+              key={`review-${selectedDataset.id}`}
+              dataset={selectedDataset}
+              user={user}
+              lastAddedId={lastAddedId}
+              setToast={setToast}
+            />
           </>
         )}
       </div>
@@ -270,11 +283,13 @@ function QuickForm({
   user,
   setToast,
   setAnomalyWarning,
+  onRecordAdded,
 }: {
   dataset: Dataset;
   user: { id: string; name: string } | null;
   setToast: (t: { msg: string; type: 'success' | 'error' | 'warning' } | null) => void;
   setAnomalyWarning: (w: AnomalyWarning | null) => void;
+  onRecordAdded?: (id: string) => void;
 }) {
   const [form, setForm] = useState({
     indicator: dataset.name,
@@ -287,35 +302,7 @@ function QuickForm({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [lastAddedId, setLastAddedId] = useState<string | null>(null);
   const periodRef = useRef<HTMLInputElement>(null);
-
-  const [datasetRecords, setDatasetRecords] = useState<DataRecord[]>(() => {
-    try {
-      return RecordRepo.getByDataset(dataset.id).sort((a, b) => b.period.localeCompare(a.period));
-    } catch {
-      return [];
-    }
-  });
-
-  const loadRecords = useCallback(() => {
-    const recs = RecordRepo.getByDataset(dataset.id).sort((a, b) => b.period.localeCompare(a.period));
-    setDatasetRecords(recs);
-  }, [dataset.id]);
-
-  useEffect(() => {
-    const unsub = subscribe(loadRecords);
-    return unsub;
-  }, [loadRecords]);
-
-  const handleDeleteRecord = (rec: DataRecord) => {
-    if (!user) return;
-    if (confirm(`Hapus data ${rec.indicator} periode ${rec.period} (${rec.value} ${rec.unit || dataset.unit})?`)) {
-      RecordRepo.delete(rec.id, user.id, user.name);
-      setToast({ msg: `Data periode ${rec.period} berhasil dihapus.`, type: 'success' });
-      loadRecords();
-    }
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -379,8 +366,7 @@ function QuickForm({
         user.name
       );
 
-      setLastAddedId(created.id);
-      loadRecords();
+      onRecordAdded?.(created.id);
       setToast({ msg: `Data ${form.indicator} (${form.period}: ${numValue} ${form.unit || dataset.unit}) berhasil disimpan ke draf.`, type: 'success' });
 
       setForm((prev) => ({
@@ -491,6 +477,29 @@ function QuickForm({
             </div>
           </div>
 
+          {/* Live Preview Strip saat Mengisi Formulir */}
+          {(form.period || form.value) && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: '12px 16px',
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 'var(--radius-md)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <Sparkles size={18} style={{ color: '#16a34a', flexShrink: 0 }} />
+              <div style={{ fontSize: 13, color: '#166534' }}>
+                <strong>Pratinjau Data yang Sedang Diisi:</strong> {form.indicator} | Periode:{' '}
+                <strong>{form.period || '(belum diisi)'}</strong> | Nilai:{' '}
+                <strong>{form.value ? `${form.value} ${form.unit || dataset.unit}` : '(belum diisi)'}</strong> ({form.region})
+              </div>
+            </div>
+          )}
+
           <div className="form-actions">
             <Button type="submit" loading={saving} icon={<Save size={14} />}>
               Simpan & Tambah Data Berikutnya
@@ -498,51 +507,101 @@ function QuickForm({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
 
-      {/* Review Section: Data yang Baru Saja / Sudah Ditambahkan */}
-      <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--slate-200)' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <div>
-            <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--slate-900)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Eye size={16} style={{ color: '#0284c7' }} />
-              Pratinjau Data yang Tersimpan ({datasetRecords.length} Data)
-            </h4>
-            <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--slate-500)' }}>
-              Riwayat entri data statistik untuk <strong>{dataset.name}</strong> ({dataset.code}). Data yang baru ditambahkan langsung muncul di baris teratas.
-            </p>
-          </div>
-          <Link href={`/datasets/${dataset.id}`}>
-            <Button variant="secondary" size="sm" icon={<ExternalLink size={13} />}>
-              Lihat di Katalog
-            </Button>
-          </Link>
+// ============================================================
+// DATASET RECORDS REVIEW CARD (DEDICATED COMPONENT)
+// ============================================================
+
+function DatasetRecordsReview({
+  dataset,
+  user,
+  lastAddedId,
+  setToast,
+}: {
+  dataset: Dataset;
+  user: { id: string; name: string } | null;
+  lastAddedId: string | null;
+  setToast: (t: { msg: string; type: 'success' | 'error' | 'warning' } | null) => void;
+}) {
+  const [records, setRecords] = useState<DataRecord[]>(() => {
+    try {
+      return RecordRepo.getByDataset(dataset.id).sort((a, b) => b.period.localeCompare(a.period));
+    } catch {
+      return [];
+    }
+  });
+
+  const loadRecords = useCallback(() => {
+    const recs = RecordRepo.getByDataset(dataset.id).sort((a, b) => b.period.localeCompare(a.period));
+    setRecords(recs);
+  }, [dataset.id]);
+
+  useEffect(() => {
+    loadRecords();
+    const unsub = subscribe(loadRecords);
+    return unsub;
+  }, [loadRecords]);
+
+  const handleDeleteRecord = (rec: DataRecord) => {
+    if (!user) return;
+    if (confirm(`Hapus data ${rec.indicator} periode ${rec.period} (${rec.value} ${rec.unit || dataset.unit})?`)) {
+      RecordRepo.delete(rec.id, user.id, user.name);
+      setToast({ msg: `Data periode ${rec.period} berhasil dihapus.`, type: 'success' });
+      loadRecords();
+    }
+  };
+
+  return (
+    <div className="section" style={{ maxWidth: 860, marginTop: 24 }}>
+      <div
+        className="section-header"
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center' }}
+      >
+        <div>
+          <h3 className="section-title">
+            <Eye size={18} style={{ color: '#0284c7' }} />
+            Pratinjau Data yang Sudah Diinput ({records.length} Data)
+          </h3>
+          <p className="section-subtitle">
+            Daftar angka statistik tersimpan untuk <strong>{dataset.name}</strong> ({dataset.code}). Baris yang baru saja ditambahkan berada paling atas.
+          </p>
         </div>
+        <Link href={`/datasets/${dataset.id}`}>
+          <Button variant="secondary" size="sm" icon={<ExternalLink size={13} />}>
+            Buka di Katalog Dataset
+          </Button>
+        </Link>
+      </div>
 
-        {datasetRecords.length === 0 ? (
+      <div className="section-body">
+        {records.length === 0 ? (
           <div
             style={{
-              padding: '24px 16px',
+              padding: '32px 20px',
               textAlign: 'center',
               background: 'var(--slate-50)',
               borderRadius: 'var(--radius-lg)',
               border: '1px dashed var(--slate-300)',
             }}
           >
-            <FileText size={26} style={{ color: 'var(--slate-400)', margin: '0 auto 6px' }} />
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--slate-600)', fontWeight: 500 }}>
-              Belum ada baris data tersimpan untuk dataset ini
+            <FileText size={32} style={{ color: 'var(--slate-400)', margin: '0 auto 8px' }} />
+            <p style={{ margin: 0, fontSize: 14, color: 'var(--slate-700)', fontWeight: 600 }}>
+              Belum ada data statistik tersimpan untuk dataset ini
             </p>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--slate-400)' }}>
-              Isi formulir di atas dan klik <strong>Simpan & Tambah Data Berikutnya</strong> untuk menambahkan data.
+            <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--slate-500)' }}>
+              Masukkan Periode / Tahun dan Nilai Angka pada formulir di atas, lalu klik <strong>Simpan & Tambah Data Berikutnya</strong>.
             </p>
           </div>
         ) : (
-          <div className="data-table-wrapper" style={{ overflowX: 'auto', maxHeight: 260 }}>
+          <div className="data-table-wrapper" style={{ overflowX: 'auto', maxHeight: 320 }}>
             <table className="data-table">
               <thead>
                 <tr>
                   <th style={{ width: 140 }}>Periode / Tahun</th>
-                  <th>Nilai Angka</th>
+                  <th>Nilai Statistik</th>
                   <th>Wilayah</th>
                   <th>Status</th>
                   <th>Waktu Input</th>
@@ -550,14 +609,14 @@ function QuickForm({
                 </tr>
               </thead>
               <tbody>
-                {datasetRecords.map((rec, index) => {
+                {records.map((rec, index) => {
                   const isNewest = lastAddedId ? rec.id === lastAddedId : index === 0;
 
                   return (
                     <tr
                       key={rec.id}
                       style={{
-                        background: isNewest ? 'rgba(16, 185, 129, 0.06)' : undefined,
+                        background: isNewest ? 'rgba(16, 185, 129, 0.08)' : undefined,
                         transition: 'background 300ms ease',
                       }}
                     >
@@ -572,16 +631,16 @@ function QuickForm({
                                 background: '#ecfdf5',
                                 color: '#059669',
                                 border: '1px solid #a7f3d0',
-                                padding: '1px 6px',
+                                padding: '2px 8px',
                                 borderRadius: 999,
                               }}
                             >
-                              Baru
+                              Baru Ditambahkan
                             </span>
                           )}
                         </div>
                       </td>
-                      <td style={{ fontWeight: 700, color: 'var(--primary-700)' }}>
+                      <td style={{ fontWeight: 700, color: 'var(--primary-700)', fontSize: 14 }}>
                         {rec.value !== null ? rec.value.toLocaleString('id-ID') : '-'} {rec.unit || dataset.unit}
                       </td>
                       <td style={{ fontSize: 12.5, color: 'var(--slate-600)' }}>
@@ -610,7 +669,7 @@ function QuickForm({
                             justifyContent: 'center',
                           }}
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={15} />
                         </button>
                       </td>
                     </tr>
