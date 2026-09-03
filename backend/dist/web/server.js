@@ -7,16 +7,80 @@ import { getBotStatus, resetWhatsAppAuth, requestPairing } from '../bot/whatsapp
 import { loadBackendStore, saveBackendStore, syncDataToFAQ, DataStatus, AuditAction } from '../data/dbStore.js';
 export function createWebServer() {
     const app = express();
-    // Enable CORS for frontend Next.js running on localhost:3000 or any origin
+    // ============================================================
+    // 0. CORS & MIDDLEWARE CONFIGURATION
+    // ============================================================
+    const allowedOriginsEnv = process.env.FRONTEND_URL || '*';
+    const allowedOrigins = allowedOriginsEnv.split(',').map(s => s.trim().toLowerCase());
     app.use(cors({
-        origin: '*',
+        origin: (origin, callback) => {
+            // Izinkan request tanpa origin (seperti curl, mobile app, atau server-to-server)
+            if (!origin || allowedOrigins.includes('*')) {
+                return callback(null, true);
+            }
+            const originLower = origin.toLowerCase();
+            if (allowedOrigins.includes(originLower)) {
+                return callback(null, true);
+            }
+            // Izinkan subdomain vercel / ngrok jika origin cocok
+            try {
+                const originUrl = new URL(origin);
+                const match = allowedOrigins.some(ao => {
+                    if (ao.startsWith('http')) {
+                        return new URL(ao).hostname === originUrl.hostname;
+                    }
+                    return originUrl.hostname.endsWith(ao.replace(/^\*\./, ''));
+                });
+                if (match)
+                    return callback(null, true);
+            }
+            catch { }
+            // Default: izinkan untuk menjamin frontend hosting dapat berkomunikasi
+            callback(null, true);
+        },
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id']
+        allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-user-id', 'ngrok-skip-browser-warning'],
+        credentials: true
     }));
     app.use(express.json({ limit: '50mb' }));
     app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+    // Middleware kompatibilitas: Otomatis memetakan /api/backend/* ke /api/* jika dipanggil langsung dari hosting
+    app.use((req, res, next) => {
+        if (req.url.startsWith('/api/backend/')) {
+            req.url = req.url.replace('/api/backend/', '/api/');
+        }
+        next();
+    });
     // Helper generator ID
     const uid = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+    // Middleware pengaman API key untuk endpoint sensitif (opsional jika API_KEY diatur di .env)
+    const requireApiKey = (req, res, next) => {
+        const configuredKey = process.env.API_KEY;
+        if (!configuredKey)
+            return next();
+        const providedKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+        if (providedKey === configuredKey)
+            return next();
+        return res.status(401).json({
+            success: false,
+            error: 'Unauthorized: Akses ditolak. Kunci API tidak valid atau belum disertakan di header x-api-key.'
+        });
+    };
+    // ============================================================
+    // HEALTH CHECK ENDPOINT
+    // ============================================================
+    app.get('/health', (req, res) => {
+        const bot = getBotStatus();
+        res.json({
+            status: 'ok',
+            service: 'SAPA BPS WhatsApp Backend',
+            port: process.env.PORT || '80',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            botState: bot.state,
+            phoneNumber: bot.phoneNumber || null
+        });
+    });
     // ============================================================
     // 1. DATASETS REST API
     // ============================================================
@@ -500,8 +564,8 @@ export function createWebServer() {
             }
         });
     });
-    // POST /api/bot/reset - Memaksa pembersihan sesi lama dan memicu QR baru
-    app.post('/api/bot/reset', async (req, res) => {
+    // POST /api/bot/reset - Memaksa pembersihan sesi lama dan memicu QR baru (Diproteksi API Key jika diset)
+    app.post('/api/bot/reset', requireApiKey, async (req, res) => {
         try {
             await resetWhatsAppAuth();
             res.json({ success: true, message: 'Sesi WhatsApp berhasil direset. Silakan tunggu QR code baru.' });
@@ -511,7 +575,7 @@ export function createWebServer() {
         }
     });
     // POST /api/bot/pairing-code - Meminta kode 8-digit untuk login tanpa scan kamera
-    app.post('/api/bot/pairing-code', async (req, res) => {
+    app.post('/api/bot/pairing-code', requireApiKey, async (req, res) => {
         const { phone } = req.body;
         if (!phone) {
             res.status(400).json({ success: false, message: 'Nomor telepon wajib diisi' });
@@ -603,27 +667,12 @@ export function createWebServer() {
         }
     });
     // ============================================================
-    // 7. BOT WHATSAPP STATUS & RESET API
+    // 7. WEB ADMIN UNIFIED REDIRECT / ENTRY
     // ============================================================
-    app.get('/api/bot/status', (req, res) => {
-        const status = getBotStatus();
-        res.json(status);
-    });
-    app.post('/api/bot/reset', async (req, res) => {
-        try {
-            await resetWhatsAppAuth();
-            res.json({ status: 'success', message: 'Sesi WhatsApp berhasil direset. QR code baru sedang dibuat...' });
-        }
-        catch (err) {
-            res.status(500).json({ status: 'error', message: 'Gagal mereset sesi WhatsApp' });
-        }
-    });
-    // ============================================================
-    // 8. WEB ADMIN UNIFIED REDIRECT / ENTRY
-    // ============================================================
-    // Redirect / dan /admin ke frontend Next.js di port 3000
+    // Redirect / dan /admin ke frontend (default localhost:3000 atau FRONTEND_URL)
     app.get(['/', '/admin'], (req, res) => {
-        res.redirect('http://localhost:3000');
+        const target = process.env.FRONTEND_URL?.split(',')[0]?.trim() || 'http://localhost:3000';
+        res.redirect(target);
     });
     return app;
 }

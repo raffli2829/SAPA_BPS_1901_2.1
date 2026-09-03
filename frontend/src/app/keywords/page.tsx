@@ -209,30 +209,81 @@ export default function KeywordsPage() {
     if (!textToSend) setSimInput('');
     setIsBotTyping(true);
 
-    // Find match in templates
+    // Find match in templates & dynamic menu
     setTimeout(() => {
       const clean = text.trim().toLowerCase();
-      let matched = templates.find((t) => t.keyword.toLowerCase() === clean);
 
-      if (!matched) {
-        matched = templates.find(
-          (t) => clean.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(clean)
-        );
-      }
+      // Bangun daftar menu dinamis: Semua dataset terbitan + 2 opsi layanan selalu di 2 posisi terbawah
+      const datasetTemplates = templates.filter((t) => t.source_type === 'DATASET' && t.id !== 'tpl-system-menu');
+      let mIdx = 1;
+      const dynamicItems: { num: number; label: string; type: 'dataset' | 'service'; response?: string }[] = [];
+
+      datasetTemplates.forEach((dt) => {
+        dynamicItems.push({
+          num: mIdx++,
+          label: dt.keyword,
+          type: 'dataset',
+          response: dt.response,
+        });
+      });
+
+      const s1Num = mIdx++;
+      dynamicItems.push({
+        num: s1Num,
+        label: 'Apa saja layanan BPS?',
+        type: 'service',
+        response:
+          `🏛️ *LAYANAN RESMI BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n1. Pelayanan Statistik Terpadu (PST) & Konsultasi\n2. Rekomendasi Kegiatan Statistik (Romantik)\n3. Permintaan Data Mikro dan Publikasi Statistik Resmi\n4. Layanan Pengaduan & Informasi Publik\n\n_Ketik *petugas* untuk berbicara dengan admin PST._`,
+      });
+
+      const s2Num = mIdx++;
+      dynamicItems.push({
+        num: s2Num,
+        label: 'Hubungi Petugas PST BPS',
+        type: 'service',
+        response:
+          `🏛️ *LAYANAN KONSULTASI STATISTIK TERPADU (PST)*\n*BPS Kabupaten Bangka*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏢 *Alamat:* Jl. Ahmad Yani Jalur Dua Sungailiat\n⏰ *Jam Layanan:* Senin – Jumat (08.00 – 15.30 WIB)\n📞 *WhatsApp PST:* https://wa.me/6281234567890\n✉️ *Email:* bps1901@bps.go.id\n🌐 *Portal:* bangkakab.bps.go.id`,
+      });
+
+      const getEmoji = (n: number) => {
+        const em = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+        return n <= 10 ? em[n - 1] : `*${n}.*`;
+      };
+
+      const dynamicMenuStr =
+        `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
+        dynamicItems.map((it) => `${getEmoji(it.num)} *${it.label}*`).join('\n') +
+        `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 _Balas dengan angka *1* - *${s2Num}*, atau ketik kata kunci pertanyaan langsung._`;
 
       let reply = '';
-      if (matched) {
-        reply = matched.response;
+
+      if (/^\d+$/.test(clean)) {
+        const num = parseInt(clean, 10);
+        const item = dynamicItems.find((d) => d.num === num);
+        if (item && item.response) {
+          reply = item.response;
+        } else {
+          reply = `Maaf, pilihan nomor *${num}* belum tersedia.\n\n${dynamicMenuStr}`;
+        }
       } else if (clean === 'menu' || clean === 'sapa' || clean === 'halo' || clean === 'p') {
-        reply =
-          `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-          `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
-          `1️⃣ *Jumlah Penduduk*\n2️⃣ *Data Kemiskinan*\n3️⃣ *Pertumbuhan Ekonomi*\n4️⃣ *Indeks Pembangunan Manusia (IPM)*\n5️⃣ *Tenaga Kerja*\n6️⃣ *Produk Domestik Regional Bruto (PDRB)*\n🔟 *Hubungi Petugas PST BPS*\n\n` +
-          `💡 _Balas dengan angka atau ketik kata kunci pertanyaan langsung._`;
+        reply = dynamicMenuStr;
       } else {
-        reply =
-          `Mohon maaf, kata kunci *"${text}"* belum terdaftar dalam template cepat kami.\n\n` +
-          `💡 _Ketik *menu* untuk melihat topik data resmi BPS Kab. Bangka, atau hubungi petugas PST kami._`;
+        let matched = templates.find((t) => t.keyword.toLowerCase() === clean);
+        if (!matched) {
+          matched = templates.find(
+            (t) => clean.includes(t.keyword.toLowerCase()) || t.keyword.toLowerCase().includes(clean)
+          );
+        }
+
+        if (matched) {
+          reply = matched.response;
+        } else {
+          reply =
+            `Mohon maaf, kata kunci *"${text}"* belum terdaftar dalam template cepat kami.\n\n` +
+            `💡 _Ketik *menu* untuk melihat daftar topik data resmi BPS Kab. Bangka, atau ketik *petugas* untuk konsultasi PST._`;
+        }
       }
 
       setSimMessages((prev) => [...prev, { sender: 'bot', text: reply, time: timeStr }]);

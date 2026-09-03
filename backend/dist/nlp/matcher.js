@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadFAQData, PST_CONTACT_CARD, INFLASI_REDIRECT_CARD } from '../data/csvLoader.js';
-import { getFriendlyGreeting, generateDynamicMenu, formatPrettyResponse, getFAQByIndex } from './menu.js';
+import { getFriendlyGreeting, generateDynamicMenu, formatPrettyResponse, getFAQByIndex, getDynamicMenuItems } from './menu.js';
 import { queryQwenAI } from './llmFallback.js';
 import { loadBackendStore, DataStatus } from '../data/dbStore.js';
 const __filename = fileURLToPath(import.meta.url);
@@ -396,27 +396,31 @@ export async function processUserMessage(rawMessage, imageBase64) {
     if (isMenuTrigger) {
         return generateDynamicMenu(faqData);
     }
-    // 6. Input Pilihan Nomor Menu (1 - 10) -> Prioritas data dinamis dari website admin
+    // 6. Input Pilihan Nomor Menu Dinamis
     if (/^\d+$/.test(msgClean)) {
         const num = parseInt(msgClean, 10);
-        const menuCategoryMap = {
-            1: "Jumlah Penduduk",
-            2: "Data Kemiskinan",
-            3: "Pertumbuhan Ekonomi",
-            4: "Indeks Pembangunan Manusia",
-            5: "Tenaga Kerja",
-            6: "Produk Domestik Regional Bruto"
-        };
-        if (menuCategoryMap[num]) {
-            const liveData = getPublishedDatasetResponse(menuCategoryMap[num]);
+        const menuItems = getDynamicMenuItems();
+        const matchedItem = menuItems.find((m) => m.number === num);
+        if (matchedItem) {
+            if (matchedItem.type === 'service') {
+                if (matchedItem.label.includes('Petugas') || matchedItem.label.includes('PST')) {
+                    return PST_CONTACT_CARD;
+                }
+                if (faqData && faqData[matchedItem.label]) {
+                    return formatPrettyResponse(matchedItem.label, faqData[matchedItem.label]);
+                }
+                return formatPrettyResponse('Layanan BPS Kabupaten Bangka', 'Layanan BPS Kabupaten Bangka mencakup:\n1. Konsultasi Statistik Terpadu (PST)\n2. Permintaan Data Mikro dan Publikasi Resmi BPS\n3. Rekomendasi Kegiatan Statistik (Romantik)\n4. Layanan Pengaduan & Informasi Publik\n\nHubungi petugas kami untuk layanan tatap muka atau daring.');
+            }
+            // Tipe 'dataset': cari data live yang terpublikasi
+            const liveData = getPublishedDatasetResponse(matchedItem.datasetId || matchedItem.datasetCategory || matchedItem.datasetName || matchedItem.label);
             if (liveData) {
-                console.log(`[MENU LIVE DATA MATCH] Menu ${num} (${menuCategoryMap[num]}) dijawab dengan data dinamis website.`);
+                console.log(`[MENU LIVE DATA MATCH] Menu ${num} (${matchedItem.label}) dijawab dengan data dinamis website.`);
                 return liveData;
             }
-        }
-        const item = getFAQByIndex(num, faqData);
-        if (item) {
-            return formatPrettyResponse(item.topic, item.answer);
+            const item = getFAQByIndex(num, faqData);
+            if (item) {
+                return formatPrettyResponse(item.topic, item.answer);
+            }
         }
         return `Maaf, pilihan nomor *${num}* belum tersedia.\n\n${generateDynamicMenu(faqData)}`;
     }
