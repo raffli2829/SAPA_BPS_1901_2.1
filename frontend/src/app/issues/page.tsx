@@ -12,7 +12,6 @@ import { Dataset, DataRecord, DataStatus } from '@/lib/types';
 import {
   AlertTriangle,
   CheckCircle2,
-  Trash2,
   ArrowRight,
   TrendingUp,
   TrendingDown,
@@ -594,7 +593,7 @@ export default function AnomalyPage() {
                             </span>
                           ) : (
                             <span style={{ color: '#b45309' }}>
-                              ⚠️ Pastikan data ini riil. Jika merupakan bug atau typo, silakan hapus.
+                              ⚠️ Fluktuasi nilai signifikan terdeteksi. Silakan periksa atau setujui jika data valid.
                             </span>
                           )}
                         </div>
@@ -605,15 +604,6 @@ export default function AnomalyPage() {
                               Lihat Dataset
                             </Button>
                           </Link>
-
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            icon={<Trash2 size={13} />}
-                            onClick={() => handleDelete(item)}
-                          >
-                            Hapus Data (Bug / Typo)
-                          </Button>
 
                           {!item.isConfirmed && (
                             <Button
