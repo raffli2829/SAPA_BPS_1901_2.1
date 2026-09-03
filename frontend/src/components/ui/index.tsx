@@ -194,6 +194,9 @@ interface ModalProps {
   children?: React.ReactNode;
   actions?: React.ReactNode;
   variant?: 'default' | 'danger' | 'warning';
+  maxWidth?: string | number;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 export function Modal({
@@ -204,13 +207,17 @@ export function Modal({
   children,
   actions,
   variant = 'default',
+  maxWidth,
+  className,
+  style,
 }: ModalProps) {
   if (!open) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className={cn('modal', `modal-${variant}`)}
+        className={cn('modal', `modal-${variant}`, className)}
+        style={{ ...(maxWidth ? { maxWidth } : {}), ...style }}
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="modal-title">{title}</h3>

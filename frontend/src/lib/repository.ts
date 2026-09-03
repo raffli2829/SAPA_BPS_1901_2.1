@@ -714,7 +714,7 @@ export const RecordRepo = {
       changes: [{ field: 'notes', old_value: '', new_value: record.notes }],
       user_id: userId,
       user_name: userName,
-      reason: customNote || 'Data anomali/lonjakan telah diverifikasi dan disetujui sebagai data valid lapangan.',
+      reason: customNote || 'Data telah diverifikasi dan disetujui sebagai data valid lapangan.',
     });
 
     BackendApi.updateRecord(record.id, record).catch(() => {});
@@ -930,7 +930,7 @@ export function getDashboardSummary(): DashboardSummary {
   const datasets = DatasetRepo.getAll();
   const records = getStore().records.filter((r) => !r.is_deleted);
 
-  // Hitung jumlah data yang memerlukan verifikasi lapangan (anomali fluktuasi tajam yang belum dikonfirmasi)
+  // Hitung jumlah data yang memerlukan verifikasi lapangan (fluktuasi tajam yang belum dikonfirmasi)
   const activeDatasets = datasets.filter((d) => d.status !== DataStatus.ARCHIVED);
   let pendingVerifikasiCount = 0;
   activeDatasets.forEach((ds) => {

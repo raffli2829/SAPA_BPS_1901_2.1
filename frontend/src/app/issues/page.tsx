@@ -160,7 +160,7 @@ export default function AnomalyPage() {
     });
   }, [anomalies, search, filterStatus]);
 
-  // Action: Setujui Data Anomali
+  // Action: Setujui Verifikasi Data
   const handleApprove = (item: AnomalyItem) => {
     setApproveTarget(item);
     setApprovalNote('Data riil terverifikasi sesuai hasil pendataan lapangan resmi BPS');
@@ -171,12 +171,12 @@ export default function AnomalyPage() {
     try {
       RecordRepo.confirmAnomaly(approveTarget.recordId, user.id, user.name, approvalNote);
       setToast({
-        msg: `Data periode ${approveTarget.period} berhasil disetujui sebagai data valid.`,
+        msg: `Data periode ${approveTarget.period} berhasil diverifikasi sebagai data valid.`,
         type: 'success',
       });
       setApproveTarget(null);
     } catch {
-      setToast({ msg: 'Gagal mengonfirmasi data anomali.', type: 'error' });
+      setToast({ msg: 'Gagal memverifikasi data.', type: 'error' });
     }
   };
 
@@ -184,15 +184,15 @@ export default function AnomalyPage() {
   const handleDelete = (item: AnomalyItem) => {
     if (
       confirm(
-        `HAPUS DATA ANOMALI?\n\nIndikator: ${item.indicator} (${item.period})\nNilai: ${item.currentValue.toLocaleString('id-ID')} ${item.unit}\n\nData ini akan dihapus permanen dari dataset jika memang salah input / bug.`
+        `HAPUS DATA VERIFIKASI?\n\nIndikator: ${item.indicator} (${item.period})\nNilai: ${item.currentValue.toLocaleString('id-ID')} ${item.unit}\n\nData ini akan dihapus permanen dari dataset jika memang salah input.`
       )
     ) {
       if (!user) return;
       try {
         RecordRepo.delete(item.recordId, user.id, user.name);
-        setToast({ msg: `Data anomali periode ${item.period} berhasil dihapus dari sistem.`, type: 'success' });
+        setToast({ msg: `Data periode ${item.period} berhasil dihapus dari sistem.`, type: 'success' });
       } catch {
-        setToast({ msg: 'Gagal menghapus data anomali.', type: 'error' });
+        setToast({ msg: 'Gagal menghapus data.', type: 'error' });
       }
     }
   };
@@ -328,7 +328,7 @@ export default function AnomalyPage() {
           </div>
         </div>
 
-        {/* Section List Anomali */}
+        {/* Section List Verifikasi Data */}
         <div className="section">
           <div className="section-header" style={{ flexWrap: 'wrap', gap: 12 }}>
             <div>
@@ -557,7 +557,7 @@ export default function AnomalyPage() {
                           </span>
                         </div>
 
-                        {/* Nilai Terkini (Anomali) */}
+                        {/* Nilai Terkini (Perlu Verifikasi) */}
                         <div style={{ textAlign: 'right' }}>
                           <span style={{ fontSize: 11.5, color: 'var(--slate-500)', fontWeight: 500 }}>
                             Periode {item.period} (Terkini)
@@ -627,7 +627,7 @@ export default function AnomalyPage() {
         </div>
       </div>
 
-      {/* Modal Konfirmasi Setujui Anomali */}
+      {/* Modal Konfirmasi Verifikasi Data */}
       {approveTarget && (
         <div
           style={{

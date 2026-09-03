@@ -252,7 +252,7 @@ function PageContent({
         <Modal
           open={true}
           onClose={() => setAnomalyWarning(null)}
-          title="Peringatan Validasi Anomali Data"
+          title="Peringatan Verifikasi Data"
           variant="warning"
           description={anomalyWarning.message}
           actions={

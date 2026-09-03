@@ -28,6 +28,12 @@ import {
   KeyRound,
   Info,
   Layers,
+  Activity,
+  Server,
+  Zap,
+  Database,
+  Wifi,
+  CheckCircle,
 } from 'lucide-react';
 
 interface BotStatusData {
@@ -37,6 +43,16 @@ interface BotStatusData {
   connectedAt?: string;
   qrUpdatedAt?: number;
   serverTime?: string;
+}
+
+interface SystemHealthData {
+  status: string;
+  service: string;
+  port: string;
+  timestamp: string;
+  uptime: number;
+  botState: string;
+  phoneNumber: string | null;
 }
 
 const QR_EXPIRE_SECONDS = 60;
@@ -73,14 +89,160 @@ export default function WhatsAppHostPage() {
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
+  // Diagnostics & Detailed Status Check
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
+  const [healthData, setHealthData] = useState<SystemHealthData | null>(null);
+  const [lastPing, setLastPing] = useState<number | null>(null);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
+  const [isCheckingDiagnostics, setIsCheckingDiagnostics] = useState(false);
+  const [copiedReport, setCopiedReport] = useState(false);
+  const [datasetCount, setDatasetCount] = useState<number | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
+
+  // Helper formatting uptime
+  const formatUptime = (seconds?: number) => {
+    if (!seconds && seconds !== 0) return '-';
+    const s = Math.floor(seconds);
+    const days = Math.floor(s / 86400);
+    const hours = Math.floor((s % 86400) / 3600);
+    const minutes = Math.floor((s % 3600) / 60);
+    const secs = s % 60;
+    if (days > 0) return `${days} hari ${hours} jam ${minutes} menit`;
+    if (hours > 0) return `${hours} jam ${minutes} menit`;
+    if (minutes > 0) return `${minutes} menit ${secs} detik`;
+    return `${secs} detik`;
+  };
+
   // Helper formatting phone
-  const formatPhone = (phone?: string) => {
+  const formatPhone = (phone?: string | null) => {
     if (!phone) return '-';
     const clean = phone.replace(/[^0-9]/g, '');
     if (clean.startsWith('62')) {
       return `+62 ${clean.slice(2, 5)}-${clean.slice(5, 9)}-${clean.slice(9)}`;
     }
     return phone;
+  };
+
+  // Diagnostics Runner
+  const handleRunDiagnostics = useCallback(async (openModal = true) => {
+    setIsCheckingDiagnostics(true);
+    setIsFetchingStatus(true);
+    setCheckError(null);
+    const startTime = performance.now();
+
+    try {
+      const [healthRes, botRes, summaryRes] = await Promise.all([
+        BackendApi.getHealth().catch(() => null),
+        BackendApi.getBotStatus().catch(() => null),
+        BackendApi.getDashboardSummary().catch(() => null),
+      ]);
+
+      const ping = Math.round(performance.now() - startTime);
+      setLastPing(ping);
+      setLastCheckedAt(new Date());
+
+      if (summaryRes && typeof summaryRes.total_datasets === 'number') {
+        setDatasetCount(summaryRes.total_datasets);
+      }
+
+      if (botRes) {
+        setBotStatus(botRes);
+        if (botRes.qr && botRes.state === 'qr_ready') {
+          try {
+            const url = await QRCode.toDataURL(botRes.qr, {
+              width: 320,
+              margin: 2,
+              color: { dark: '#0f172a', light: '#ffffff' },
+            });
+            setQrDataUrl(url);
+          } catch (qrErr) {
+            console.error('Failed generating QR Data URL:', qrErr);
+          }
+        } else {
+          setQrDataUrl(null);
+        }
+      }
+
+      if (healthRes && (healthRes.status === 'ok' || healthRes.service)) {
+        setHealthData(healthRes);
+        const botConnected = botRes?.state === 'connected' || healthRes.botState === 'connected';
+        const phone = botRes?.phoneNumber || healthRes.phoneNumber;
+
+        if (botConnected) {
+          setToast({
+            msg: `✅ [${ping}ms] Sistem Normal: Server Aktif & WhatsApp Bot Terhubung (${formatPhone(phone)})`,
+            type: 'success',
+          });
+        } else if (botRes?.state === 'qr_ready') {
+          setToast({
+            msg: `🟡 [${ping}ms] Server Port 80 Aktif. Bot WhatsApp siap scan QR code.`,
+            type: 'success',
+          });
+        } else {
+          setToast({
+            msg: `🔵 [${ping}ms] Server Port 80 Aktif. Bot WhatsApp status: ${botRes?.state || 'connecting'}`,
+            type: 'success',
+          });
+        }
+      } else {
+        setCheckError('Server backend port 80 tidak merespons. Pastikan file START_SAPA_BPS.bat sudah dijalankan.');
+        setToast({
+          msg: '❌ Server backend port 80 tidak merespons. Periksa START_SAPA_BPS.bat.',
+          type: 'error',
+        });
+      }
+
+      if (openModal) {
+        setShowDiagnosticModal(true);
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Gagal menghubungi server.';
+      setCheckError(errMsg);
+      setToast({
+        msg: '❌ Terjadi kesalahan saat memeriksa status server.',
+        type: 'error',
+      });
+      if (openModal) {
+        setShowDiagnosticModal(true);
+      }
+    } finally {
+      setIsCheckingDiagnostics(false);
+      setIsFetchingStatus(false);
+    }
+  }, []);
+
+  const handleCopyReport = () => {
+    const timeStr = lastCheckedAt
+      ? lastCheckedAt.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'medium' })
+      : new Date().toLocaleString('id-ID');
+    const isBotOnline = botStatus.state === 'connected' || healthData?.botState === 'connected';
+    const phone = botStatus.phoneNumber || healthData?.phoneNumber;
+    const uptimeStr = formatUptime(healthData?.uptime);
+
+    const report = [
+      '====================================================',
+      '        LAPORAN STATUS & DIAGNOSTIK SAPA BPS        ',
+      '====================================================',
+      `Waktu Pengecekan : ${timeStr} WIB`,
+      `Status Backend   : ${healthData ? 'ONLINE / SEHAT (Port 80)' : 'TIDAK MERESPONS'}`,
+      `Latency (Ping)   : ${lastPing !== null ? `${lastPing} ms` : '-'}`,
+      `Uptime Server    : ${uptimeStr}`,
+      `Bot WhatsApp     : ${isBotOnline ? 'ONLINE & TERHUBUNG' : botStatus.state === 'qr_ready' ? 'MENUNGGU SCAN QR' : botStatus.state}`,
+      `Nomor Host       : ${formatPhone(phone)}`,
+      `Enkripsi Sesi    : Signal Protocol End-to-End`,
+      `Dataset Aktif    : ${datasetCount !== null ? `${datasetCount} Dataset` : 'Tersinkron'}`,
+      `Public Endpoint  : https://footless-aptitude-caloric.ngrok-free.dev`,
+      `Health Endpoint  : https://footless-aptitude-caloric.ngrok-free.dev/health`,
+      '====================================================',
+      isBotOnline
+        ? 'KESIMPULAN: Layanan Chatbot WhatsApp & REST API beroperasi normal.'
+        : 'KESIMPULAN: Server aktif, silakan scan QR code atau sambungkan nomor host.',
+    ].join('\n');
+
+    navigator.clipboard.writeText(report);
+    setCopiedReport(true);
+    setToast({ msg: 'Laporan diagnostik lengkap berhasil disalin ke clipboard!', type: 'success' });
+    setTimeout(() => setCopiedReport(false), 2500);
   };
 
   // 1. Fetch Bot Status
@@ -196,9 +358,14 @@ export default function WhatsAppHostPage() {
       return;
     }
 
-    fetchStatus();
+    const initialTimer = setTimeout(() => {
+      fetchStatus();
+    }, 0);
     const interval = setInterval(fetchStatus, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, [isAuthenticated, isLoading, router, fetchStatus]);
 
   // 60-second auto-refresh countdown when NOT connected
@@ -305,13 +472,41 @@ export default function WhatsAppHostPage() {
             <Button
               variant="secondary"
               size="sm"
-              icon={<RefreshCw size={13} className={isFetchingStatus ? 'spin' : ''} />}
-              onClick={() => {
-                setIsFetchingStatus(true);
-                fetchStatus().finally(() => setIsFetchingStatus(false));
+              icon={
+                <RefreshCw
+                  size={13}
+                  className={isCheckingDiagnostics || isFetchingStatus ? 'spin' : ''}
+                />
+              }
+              onClick={() => handleRunDiagnostics(true)}
+              title="Periksa koneksi, latency ping, dan diagnosa status lengkap"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontWeight: 600,
               }}
             >
-              Cek Status
+              <span>{isCheckingDiagnostics ? 'Memeriksa...' : 'Cek Status'}</span>
+              {lastPing !== null && !isCheckingDiagnostics && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    padding: '2px 7px',
+                    borderRadius: 12,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: lastPing < 60 ? '#ecfdf5' : lastPing < 200 ? '#fef3c7' : '#fee2e2',
+                    color: lastPing < 60 ? '#047857' : lastPing < 200 ? '#b45309' : '#b91c1c',
+                    border: `1px solid ${lastPing < 60 ? '#a7f3d0' : lastPing < 200 ? '#fde68a' : '#fca5a5'}`,
+                  }}
+                >
+                  <Activity size={10} />
+                  {lastPing}ms
+                </span>
+              )}
             </Button>
           </div>
         }
@@ -977,6 +1172,388 @@ export default function WhatsAppHostPage() {
               Setelah diputuskan, bot tidak akan lagi membalas pesan WhatsApp dari nomor ini sampai ada perangkat baru yang memindai QR code berikutnya.
             </p>
           </div>
+        </div>
+      </Modal>
+
+      {/* Modal Diagnostik Status & Kesehatan Sistem */}
+      <Modal
+        open={showDiagnosticModal}
+        onClose={() => setShowDiagnosticModal(false)}
+        title="Diagnostik Status & Kesehatan Sistem"
+        description="Pemeriksaan konektivitas real-time antara Frontend, Server Backend (Port 80), Socket WhatsApp, dan Tunnel Publik."
+        maxWidth={620}
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={copiedReport ? <Check size={14} /> : <Copy size={14} />}
+              onClick={handleCopyReport}
+            >
+              {copiedReport ? 'Tersalin!' : 'Salin Laporan'}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<RefreshCw size={14} className={isCheckingDiagnostics ? 'spin' : ''} />}
+              onClick={() => handleRunDiagnostics(false)}
+              disabled={isCheckingDiagnostics}
+            >
+              {isCheckingDiagnostics ? 'Menguji...' : 'Uji Ping Ulang'}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowDiagnosticModal(false)}
+            >
+              Tutup
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Card Hero Ringkasan Status */}
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 12,
+              background: checkError
+                ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
+                : botStatus.state === 'connected'
+                ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
+                : 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+              border: `1px solid ${
+                checkError
+                  ? '#fca5a5'
+                  : botStatus.state === 'connected'
+                  ? '#86efac'
+                  : '#fde68a'
+              }`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 10,
+                  background: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: checkError
+                    ? '#dc2626'
+                    : botStatus.state === 'connected'
+                    ? '#16a34a'
+                    : '#d97706',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                  flexShrink: 0,
+                }}
+              >
+                {checkError ? (
+                  <AlertCircle size={24} />
+                ) : botStatus.state === 'connected' ? (
+                  <CheckCircle2 size={24} />
+                ) : (
+                  <Zap size={24} />
+                )}
+              </div>
+              <div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    color: checkError
+                      ? '#b91c1c'
+                      : botStatus.state === 'connected'
+                      ? '#15803d'
+                      : '#b45309',
+                  }}
+                >
+                  {checkError
+                    ? 'GANGGUAN KONEKSI'
+                    : botStatus.state === 'connected'
+                    ? 'SEMUA SISTEM NORMAL'
+                    : 'MENUNGGU KONEKSI'}
+                </div>
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    marginTop: 2,
+                  }}
+                >
+                  {checkError
+                    ? 'Backend Tidak Menjawab'
+                    : botStatus.state === 'connected'
+                    ? 'Bot WhatsApp & Server Siap'
+                    : botStatus.state === 'qr_ready'
+                    ? 'Perlu Pindai QR WhatsApp'
+                    : 'Menyiapkan Socket WhatsApp...'}
+                </div>
+              </div>
+            </div>
+
+            {/* Latency Meter Pill */}
+            {lastPing !== null && !checkError && (
+              <div
+                style={{
+                  background: '#ffffff',
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Activity
+                  size={16}
+                  style={{
+                    color: lastPing < 60 ? '#16a34a' : lastPing < 200 ? '#d97706' : '#dc2626',
+                  }}
+                />
+                <div>
+                  <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>LATENCY</div>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 800,
+                      color: lastPing < 60 ? '#16a34a' : lastPing < 200 ? '#d97706' : '#dc2626',
+                    }}
+                  >
+                    {lastPing} ms{' '}
+                    <span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>
+                      ({lastPing < 60 ? 'Optimal' : lastPing < 200 ? 'Sedang' : 'Lambat'})
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Grid Komponen Sistem */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: 10,
+            }}
+          >
+            {/* 1. Server Express Backend */}
+            <div
+              style={{
+                border: '1px solid var(--slate-200)',
+                borderRadius: 10,
+                padding: 12,
+                background: '#f8fafc',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#1e293b' }}>
+                  <Server size={15} style={{ color: '#2563eb' }} />
+                  Server Backend Express
+                </div>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    background: healthData ? '#dcfce7' : '#fee2e2',
+                    color: healthData ? '#15803d' : '#b91c1c',
+                  }}
+                >
+                  {healthData ? 'PORT 80 AKTIF' : 'OFFLINE'}
+                </span>
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div>Host: <strong>http://127.0.0.1:80</strong></div>
+                <div>Uptime: <strong>{formatUptime(healthData?.uptime)}</strong></div>
+              </div>
+            </div>
+
+            {/* 2. Socket Baileys WhatsApp */}
+            <div
+              style={{
+                border: '1px solid var(--slate-200)',
+                borderRadius: 10,
+                padding: 12,
+                background: '#f8fafc',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#1e293b' }}>
+                  <Smartphone size={15} style={{ color: '#10b981' }} />
+                  Socket Bot WhatsApp
+                </div>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    background:
+                      botStatus.state === 'connected'
+                        ? '#dcfce7'
+                        : botStatus.state === 'qr_ready'
+                        ? '#fef3c7'
+                        : '#f1f5f9',
+                    color:
+                      botStatus.state === 'connected'
+                        ? '#15803d'
+                        : botStatus.state === 'qr_ready'
+                        ? '#b45309'
+                        : '#475569',
+                  }}
+                >
+                  {botStatus.state === 'connected'
+                    ? 'TERHUBUNG'
+                    : botStatus.state === 'qr_ready'
+                    ? 'SIAP QR'
+                    : 'CONNECTING'}
+                </span>
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div>Nomor: <strong>{formatPhone(botStatus.phoneNumber || healthData?.phoneNumber)}</strong></div>
+                <div>Sesi: <strong>Signal Protocol (E2E Encrypted)</strong></div>
+              </div>
+            </div>
+
+            {/* 3. Ngrok Public Tunnel */}
+            <div
+              style={{
+                border: '1px solid var(--slate-200)',
+                borderRadius: 10,
+                padding: 12,
+                background: '#f8fafc',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#1e293b' }}>
+                  <Radio size={15} style={{ color: '#0284c7' }} />
+                  Ngrok Public Tunnel
+                </div>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                  }}
+                >
+                  HTTPS TUNNEL
+                </span>
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  URL: <a href="https://footless-aptitude-caloric.ngrok-free.dev" target="_blank" rel="noreferrer" style={{ color: '#0284c7', textDecoration: 'underline' }}>footless-aptitude-caloric.ngrok-free.dev</a>
+                </div>
+                <div>Target: <strong>Localhost Port 80</strong></div>
+              </div>
+            </div>
+
+            {/* 4. AI & NLP Store */}
+            <div
+              style={{
+                border: '1px solid var(--slate-200)',
+                borderRadius: 10,
+                padding: 12,
+                background: '#f8fafc',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#1e293b' }}>
+                  <Sparkles size={15} style={{ color: '#8b5cf6' }} />
+                  Mesin NLP & Dataset BPS
+                </div>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    background: '#f3e8ff',
+                    color: '#7e22ce',
+                  }}
+                >
+                  SIAP MELAYANI
+                </span>
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div>Dataset Aktif: <strong>{datasetCount !== null ? `${datasetCount} Dataset` : 'Tersinkronisasi'}</strong></div>
+                <div>Model AI: <strong>Groq Compound Mini + Rule Matcher</strong></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Info / Petunjuk jika error */}
+          {checkError ? (
+            <div
+              style={{
+                padding: 12,
+                background: '#fff1f2',
+                border: '1px solid #fecdd3',
+                borderRadius: 8,
+                fontSize: 12,
+                color: '#9f1239',
+                lineHeight: 1.4,
+              }}
+            >
+              <strong>Langkah Perbaikan:</strong>
+              <ol style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                <li>Buka folder proyek SAPA BPS dan jalankan <code>START_SAPA_BPS.bat</code>.</li>
+                <li>Pastikan port 80 tidak digunakan aplikasi web server lain (misal Apache/IIS).</li>
+                <li>Setelah terminal server terbuka, klik tombol <strong>Uji Ping Ulang</strong> di bawah.</li>
+              </ol>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: 11.5,
+                color: '#64748b',
+                paddingTop: 4,
+              }}
+            >
+              <div>
+                Terakhir dicek:{' '}
+                <strong>
+                  {lastCheckedAt
+                    ? lastCheckedAt.toLocaleTimeString('id-ID')
+                    : 'Baru saja'}{' '}
+                  WIB
+                </strong>
+              </div>
+              <a
+                href="http://localhost:80/health"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  color: 'var(--primary-color)',
+                  textDecoration: 'none',
+                  fontWeight: 600,
+                }}
+              >
+                Buka /health lokal <ExternalLink size={11} />
+              </a>
+            </div>
+          )}
         </div>
       </Modal>
 

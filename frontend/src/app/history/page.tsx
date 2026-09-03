@@ -18,7 +18,7 @@ const ACTION_LABELS: Record<string, string> = {
   [AuditAction.STATUS_CHANGE]: 'Mengubah Status',
   [AuditAction.PUBLISH]: 'Mempublikasikan',
   [AuditAction.ARCHIVE]: 'Mengarsipkan',
-  [AuditAction.VERIFY_ANOMALY]: 'Verifikasi Anomali',
+  [AuditAction.VERIFY_ANOMALY]: 'Verifikasi Data',
 };
 
 const FILTER_ACTION_OPTIONS = [
@@ -28,7 +28,7 @@ const FILTER_ACTION_OPTIONS = [
   { value: AuditAction.STATUS_CHANGE, label: 'Mengubah Status' },
   { value: AuditAction.PUBLISH, label: 'Mempublikasikan' },
   { value: AuditAction.ARCHIVE, label: 'Mengarsipkan' },
-  { value: AuditAction.VERIFY_ANOMALY, label: 'Verifikasi Anomali' },
+  { value: AuditAction.VERIFY_ANOMALY, label: 'Verifikasi Data' },
 ];
 
 export default function HistoryPage() {

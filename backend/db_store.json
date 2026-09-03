@@ -1,6 +1,24 @@
 {
   "datasets": [
     {
+      "id": "1788419349379-uhpbiiy",
+      "code": "JUML-001",
+      "name": "jumlah umat",
+      "category": "Jumlah Penduduk",
+      "description": "",
+      "definition": "",
+      "geographic_scope": "Kabupaten Bangka",
+      "unit": "Jiwa",
+      "source": "BPS Kabupaten Bangka",
+      "period_type": "YEARLY",
+      "status": "PUBLISHED",
+      "created_by": "user-2",
+      "updated_by": "user-2",
+      "created_at": "2026-09-03T07:09:09.709Z",
+      "updated_at": "2026-09-03T07:09:33.039Z",
+      "record_count": 0
+    },
+    {
       "id": "ds-1",
       "code": "POP-001",
       "name": "Jumlah Penduduk Kabupaten Bangka",
@@ -921,6 +939,68 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "log-4e8waf8mtl6pvxr",
+      "entity_type": "dataset",
+      "entity_id": "1788419349379-uhpbiiy",
+      "entity_name": "jumlah umat",
+      "action": "UPDATE",
+      "changes": [
+        {
+          "field": "updated",
+          "old_value": "2026-09-03T07:09:09.709Z",
+          "new_value": "2026-09-03T07:09:33.039Z"
+        }
+      ],
+      "user_id": "user-1",
+      "user_name": "Petugas",
+      "created_at": "2026-09-03T07:09:33.039Z"
+    },
+    {
+      "id": "1788419373031-srsu9z3",
+      "entity_type": "dataset",
+      "entity_id": "1788419349379-uhpbiiy",
+      "entity_name": "jumlah umat",
+      "action": "STATUS_CHANGE",
+      "changes": [
+        {
+          "field": "status",
+          "old_value": "DRAFT",
+          "new_value": "PUBLISHED"
+        }
+      ],
+      "user_id": "user-2",
+      "user_name": "Siti Nurhaliza",
+      "created_at": "2026-09-03T07:09:33.036Z"
+    },
+    {
+      "id": "1788419349379-hbnbvjb",
+      "entity_type": "dataset",
+      "entity_id": "1788419349379-uhpbiiy",
+      "entity_name": "jumlah umat",
+      "action": "CREATE",
+      "changes": [],
+      "user_id": "user-2",
+      "user_name": "Siti Nurhaliza",
+      "created_at": "2026-09-03T07:09:09.711Z"
+    },
+    {
+      "id": "log-qa05qzomtl6pdxq",
+      "entity_type": "dataset",
+      "entity_id": "1788419349379-uhpbiiy",
+      "entity_name": "jumlah umat",
+      "action": "CREATE",
+      "changes": [
+        {
+          "field": "status",
+          "old_value": null,
+          "new_value": "DRAFT"
+        }
+      ],
+      "user_id": "user-2",
+      "user_name": "Siti Nurhaliza",
+      "created_at": "2026-09-03T07:09:09.709Z"
+    },
     {
       "id": "1788405333274-exg9k40",
       "entity_type": "record",

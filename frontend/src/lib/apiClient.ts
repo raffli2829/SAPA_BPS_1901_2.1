@@ -210,6 +210,27 @@ export const BackendApi = {
     return safeFetch<DashboardSummary>(`${BASE_URL}/api/backend/dashboard/summary`);
   },
 
+  // Health Check & Diagnostics
+  async getHealth(): Promise<{
+    status: string;
+    service: string;
+    port: string;
+    timestamp: string;
+    uptime: number;
+    botState: string;
+    phoneNumber: string | null;
+  } | null> {
+    return safeFetch<{
+      status: string;
+      service: string;
+      port: string;
+      timestamp: string;
+      uptime: number;
+      botState: string;
+      phoneNumber: string | null;
+    }>(`${BASE_URL}/health`);
+  },
+
   // Bot Status & Chat Integration
   async getBotStatus(): Promise<{
     state: 'connecting' | 'connected' | 'qr_ready' | 'disconnected';
