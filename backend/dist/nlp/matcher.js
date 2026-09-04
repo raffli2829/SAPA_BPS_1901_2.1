@@ -248,46 +248,65 @@ export function getPublishedDatasetResponse(datasetQuery, specifiedYears = []) {
         const publishedDatasets = store.datasets.filter(d => d.status === DataStatus.PUBLISHED);
         if (publishedDatasets.length === 0)
             return null;
-        const queryLower = datasetQuery.toLowerCase();
-        // 1. Cari dataset yang cocok
-        let matchedDs = publishedDatasets.find(d => d.id.toLowerCase() === queryLower ||
-            d.name.toLowerCase() === queryLower ||
-            d.category.toLowerCase() === queryLower ||
-            d.code.toLowerCase() === queryLower);
-        if (!matchedDs) {
-            // Pencarian kata kunci tematik
-            matchedDs = publishedDatasets.find(d => {
-                const fullText = `${d.name} ${d.category} ${d.description}`.toLowerCase();
+        // Filter kandidat yang memiliki data riil (record count > 0) terlebih dahulu
+        const datasetsWithRecords = publishedDatasets.map(d => ({
+            dataset: d,
+            records: store.records.filter(r => r.dataset_id === d.id && r.status === DataStatus.PUBLISHED && !r.is_deleted && r.value !== null)
+        })).filter(item => item.records.length > 0);
+        if (datasetsWithRecords.length === 0)
+            return null;
+        const queryLower = datasetQuery.trim().toLowerCase();
+        // 1. Cari exact match ID / code / name / category
+        let matchedItem = datasetsWithRecords.find(item => item.dataset.id.toLowerCase() === queryLower ||
+            item.dataset.code.toLowerCase() === queryLower ||
+            item.dataset.name.toLowerCase() === queryLower ||
+            item.dataset.category.toLowerCase() === queryLower);
+        if (!matchedItem) {
+            // 2. Pencarian kata kunci tematik
+            matchedItem = datasetsWithRecords.find(item => {
+                const d = item.dataset;
+                const nameLower = d.name.toLowerCase();
+                const catLower = d.category.toLowerCase();
+                const descLower = (d.description || '').toLowerCase();
+                const fullText = `${nameLower} ${catLower} ${descLower}`;
                 if (queryLower.includes('penduduk') || queryLower.includes('populasi') || queryLower.includes('jiwa')) {
-                    return d.category.toLowerCase().includes('penduduk') || d.name.toLowerCase().includes('penduduk');
+                    return catLower.includes('penduduk') || nameLower.includes('penduduk');
                 }
                 if (queryLower.includes('miskin') || queryLower.includes('kemiskinan')) {
-                    return d.category.toLowerCase().includes('kemiskinan') || d.name.toLowerCase().includes('kemiskinan');
+                    return catLower.includes('kemiskinan') || nameLower.includes('kemiskinan');
                 }
                 if (queryLower.includes('pertumbuhan ekonomi') || (queryLower.includes('ekonomi') && !queryLower.includes('pdrb'))) {
-                    return d.category.toLowerCase().includes('pertumbuhan ekonomi') || d.name.toLowerCase().includes('pertumbuhan ekonomi');
+                    return catLower.includes('pertumbuhan ekonomi') || nameLower.includes('pertumbuhan ekonomi');
                 }
                 if (queryLower.includes('ipm') || queryLower.includes('manusia')) {
-                    return d.category.toLowerCase().includes('ipm') || d.name.toLowerCase().includes('ipm');
+                    return catLower.includes('ipm') || nameLower.includes('ipm');
                 }
                 if (queryLower.includes('tpt') || queryLower.includes('pengangguran') || queryLower.includes('tenaga kerja') || queryLower.includes('kerja')) {
-                    return d.category.toLowerCase().includes('tenaga kerja') || d.name.toLowerCase().includes('tenaga kerja');
+                    return catLower.includes('tenaga kerja') || nameLower.includes('tenaga kerja');
                 }
                 if (queryLower.includes('pdrb') || queryLower.includes('bruto')) {
-                    return d.category.toLowerCase().includes('pdrb') || d.name.toLowerCase().includes('pdrb');
+                    return catLower.includes('pdrb') || nameLower.includes('pdrb');
                 }
-                return fullText.includes(queryLower);
+                if (queryLower.includes('ipg') || queryLower.includes('gender')) {
+                    return catLower.includes('gender') || nameLower.includes('gender') || catLower.includes('ipg') || nameLower.includes('ipg');
+                }
+                if (queryLower.includes('pendidikan') || queryLower.includes('rls') || queryLower.includes('hls') || queryLower.includes('sekolah')) {
+                    return catLower.includes('pendidikan') || nameLower.includes('pendidikan') || nameLower.includes('sekolah');
+                }
+                return fullText.includes(queryLower) || queryLower.includes(nameLower) || queryLower.includes(catLower);
             });
         }
-        if (!matchedDs)
+        if (!matchedItem)
             return null;
-        // Ambil seluruh record berstatus PUBLISHED dan !is_deleted
-        let records = store.records.filter(r => r.dataset_id === matchedDs.id && r.status === DataStatus.PUBLISHED && !r.is_deleted);
-        if (records.length === 0)
-            return null;
-        // Urutkan berdasarkan periode (tahun)
-        records.sort((a, b) => a.period.localeCompare(b.period));
-        // Jika user spesifik menanyakan tahun tertentu (misal 2025)
+        const matchedDs = matchedItem.dataset;
+        let records = matchedItem.records;
+        // URUTKAN DARI TAHUN/PERIODE TERBARU KE TERLAMA (Descending)
+        records.sort((a, b) => b.period.localeCompare(a.period));
+        const latest = records[0];
+        const latestVal = latest.value !== null && latest.value !== undefined
+            ? (typeof latest.value === 'number' ? latest.value.toLocaleString('id-ID') : latest.value)
+            : '-';
+        // Jika user spesifik menanyakan tahun tertentu (misal 2025):
         let filteredRecords = records;
         if (specifiedYears.length > 0) {
             const matchedYears = records.filter(r => specifiedYears.includes(r.period));
@@ -295,41 +314,41 @@ export function getPublishedDatasetResponse(datasetQuery, specifiedYears = []) {
                 filteredRecords = matchedYears;
             }
         }
-        // Jika hanya 1 tahun yang diminta / cocok (misal: "penduduk 2025"):
         if (filteredRecords.length === 1) {
             const r = filteredRecords[0];
             const val = r.value !== null && r.value !== undefined ? (typeof r.value === 'number' ? r.value.toLocaleString('id-ID') : r.value) : '-';
             const notesLine = r.notes ? `\n• *Catatan Metodologi:* ${r.notes}` : '';
-            return formatPrettyResponse(`${matchedDs.name} (Tahun ${r.period})`, `👥 *Data Resmi dari Database SAPA BPS:*\n\n` +
+            return formatPrettyResponse(`${matchedDs.name} (Tahun ${r.period})`, `⭐ *DATA RESMI TERBARU DARI DATABASE SAPA BPS:*\n\n` +
                 `• *Indikator:* ${r.indicator}\n` +
                 `• *Periode:* Tahun ${r.period}\n` +
-                `• *Nilai Realisasi:* *${val} ${r.unit}*` +
+                `• *Nilai Realisasi:* *${val} ${r.unit || matchedDs.unit}*` +
                 `${notesLine}\n` +
                 `• *Wilayah:* ${r.region}\n\n` +
-                `📊 *Sumber Data:* ${matchedDs.source}\n` +
+                `🏢 *Sumber Data:* ${matchedDs.source || 'BPS Kabupaten Bangka'}\n` +
                 `💡 _Data ini tersinkronisasi langsung secara real-time dari website SAPA BPS Kab. Bangka._`);
         }
-        // Jika menampilkan deret waktu / multi-tahun:
-        const lines = filteredRecords.map(r => {
+        // Jika menampilkan deret waktu / multi-tahun (selalu urut dari tahun terbaru ke terlama):
+        const historyLines = filteredRecords.map(r => {
             const val = r.value !== null && r.value !== undefined ? (typeof r.value === 'number' ? r.value.toLocaleString('id-ID') : r.value) : '-';
             const noteStr = r.notes ? ` _(${r.notes})_` : '';
-            return `• *Tahun ${r.period}:* *${val} ${r.unit}*${noteStr}`;
+            return `• *Tahun ${r.period}:* *${val} ${r.unit || matchedDs.unit}*${noteStr}`;
         });
         const periodsLabel = filteredRecords.map(r => r.period).join(', ');
-        return formatPrettyResponse(`${matchedDs.name}`, `📊 *Rincian Data Resmi Sistem SAPA BPS (${periodsLabel}):*\n\n` +
-            `${lines.join('\n')}\n\n` +
+        return formatPrettyResponse(`${matchedDs.name}`, `📊 *Data Resmi Sistem SAPA BPS Kab. Bangka*\n\n` +
+            `⭐ *REALISASI TERBARU (Tahun ${latest.period}):*\n` +
+            `👉 *${latestVal} ${latest.unit || matchedDs.unit}*\n` +
+            (latest.notes ? `_Catatan: ${latest.notes}_\n\n` : '\n') +
+            `📈 *Rincian Perkembangan Historis (${periodsLabel}):*\n` +
+            `${historyLines.join('\n')}\n\n` +
             `📁 *Kategori:* ${matchedDs.category}\n` +
-            `🏢 *Sumber Data:* ${matchedDs.source}\n` +
-            `💡 _Data ini terupdate secara real-time langsung dari website data BPS Kab. Bangka._`);
+            `🏢 *Sumber Data:* ${matchedDs.source || 'BPS Kabupaten Bangka'}\n` +
+            `💡 _Data ini terupdate secara real-time langsung dari Katalog Dataset SAPA BPS._`);
     }
     catch (e) {
         console.error('[ERR getPublishedDatasetResponse]', e);
         return null;
     }
 }
-/**
- * Mencari data yang cocok dari records yang diinput via website admin.
- */
 function tryMatchWebsiteData(rawMessage) {
     const msgLower = rawMessage.toLowerCase();
     const years = extractYears(msgLower);
@@ -446,9 +465,15 @@ export async function processUserMessage(rawMessage, imageBase64, sessionId = 'd
             // Tipe 'dataset': Cek apakah kategori ini memiliki LEBIH DARI 1 DATASET TERBITAN
             const store = loadBackendStore();
             const targetCategory = (matchedItem.datasetCategory || matchedItem.label).trim().toLowerCase();
-            const categoryDatasets = store.datasets.filter((d) => d.status === DataStatus.PUBLISHED &&
-                (d.category.trim().toLowerCase() === targetCategory ||
-                    d.name.trim().toLowerCase().includes(targetCategory)));
+            const categoryDatasets = store.datasets.filter((d) => {
+                if (d.status !== DataStatus.PUBLISHED)
+                    return false;
+                const recCount = store.records.filter((r) => r.dataset_id === d.id && r.status === DataStatus.PUBLISHED && !r.is_deleted && r.value !== null).length;
+                if (recCount === 0)
+                    return false;
+                return (d.category.trim().toLowerCase() === targetCategory ||
+                    d.name.trim().toLowerCase().includes(targetCategory));
+            });
             if (categoryDatasets.length > 1) {
                 pendingSubmenuSessions.set(sessionId, {
                     category: matchedItem.label,

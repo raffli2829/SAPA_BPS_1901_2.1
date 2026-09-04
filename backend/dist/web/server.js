@@ -4,7 +4,8 @@ import fs from 'fs';
 import { loadFAQData, saveFAQData, CSV_FILE_PATH } from '../data/csvLoader.js';
 import { processUserMessage } from '../nlp/matcher.js';
 import { getBotStatus, resetWhatsAppAuth, requestPairing } from '../bot/whatsapp.js';
-import { loadBackendStore, saveBackendStore, syncDataToFAQ, DataStatus, AuditAction } from '../data/dbStore.js';
+import { renderAdminHTML } from './adminView.js';
+import { loadBackendStore, saveBackendStore, syncDataToFAQ, syncAllPublishedToFAQ, DataStatus, AuditAction } from '../data/dbStore.js';
 export function createWebServer() {
     const app = express();
     // ============================================================
@@ -130,8 +131,10 @@ export function createWebServer() {
             return;
         }
         const now = new Date().toISOString();
+        const targetId = body.id || `ds-${uid()}`;
+        const existingIdx = store.datasets.findIndex(d => d.id === targetId || d.code.trim().toUpperCase() === body.code.trim().toUpperCase());
         const newDataset = {
-            id: body.id || `ds-${uid()}`,
+            id: existingIdx !== -1 ? store.datasets[existingIdx].id : targetId,
             code: body.code.trim().toUpperCase(),
             name: body.name.trim(),
             category: body.category.trim(),
@@ -144,25 +147,30 @@ export function createWebServer() {
             status: body.status || DataStatus.DRAFT,
             created_by: body.created_by || 'user-1',
             updated_by: body.updated_by || 'user-1',
-            created_at: now,
+            created_at: existingIdx !== -1 ? store.datasets[existingIdx].created_at : now,
             updated_at: now,
-            record_count: 0
+            record_count: existingIdx !== -1 ? store.datasets[existingIdx].record_count || 0 : 0
         };
-        store.datasets.unshift(newDataset);
+        if (existingIdx !== -1) {
+            store.datasets[existingIdx] = newDataset;
+        }
+        else {
+            store.datasets.unshift(newDataset);
+        }
         // Audit log
         store.auditLogs.unshift({
             id: `log-${uid()}`,
             entity_type: 'dataset',
             entity_id: newDataset.id,
             entity_name: newDataset.name,
-            action: AuditAction.CREATE,
+            action: existingIdx !== -1 ? AuditAction.UPDATE : AuditAction.CREATE,
             changes: [{ field: 'status', old_value: null, new_value: newDataset.status }],
             user_id: newDataset.created_by,
             user_name: store.users.find(u => u.id === newDataset.created_by)?.name || 'Admin',
             created_at: now
         });
         saveBackendStore(store);
-        res.status(201).json({ success: true, data: newDataset });
+        res.status(existingIdx !== -1 ? 200 : 201).json({ success: true, data: newDataset });
     });
     // PUT /api/datasets/:id
     app.put('/api/datasets/:id', (req, res) => {
@@ -220,7 +228,7 @@ export function createWebServer() {
     // GET /api/records
     app.get('/api/records', (req, res) => {
         const store = loadBackendStore();
-        const { dataset_id, period, region, indicator } = req.query;
+        const { dataset_id, period, region, indicator, status } = req.query;
         let list = store.records.filter(r => !r.is_deleted);
         if (dataset_id) {
             list = list.filter(r => r.dataset_id === dataset_id);
@@ -234,15 +242,30 @@ export function createWebServer() {
         if (indicator) {
             list = list.filter(r => r.indicator.toLowerCase().includes(String(indicator).toLowerCase()));
         }
+        if (status) {
+            list = list.filter(r => r.status === status);
+        }
         res.json({ success: true, data: list, count: list.length });
+    });
+    // GET /api/records/:id
+    app.get('/api/records/:id', (req, res) => {
+        const store = loadBackendStore();
+        const record = store.records.find(r => r.id === req.params.id && !r.is_deleted);
+        if (!record) {
+            res.status(404).json({ success: false, error: 'Record tidak ditemukan.' });
+            return;
+        }
+        res.json({ success: true, data: record });
     });
     // POST /api/records
     app.post('/api/records', (req, res) => {
         const store = loadBackendStore();
         const body = req.body;
         const now = new Date().toISOString();
+        const targetId = body.id || `rec-${uid()}`;
+        const existingIdx = store.records.findIndex(r => r.id === targetId);
         const newRecord = {
-            id: body.id || `rec-${uid()}`,
+            id: targetId,
             dataset_id: body.dataset_id,
             indicator: body.indicator || '',
             region: body.region || 'Kabupaten Bangka',
@@ -254,11 +277,16 @@ export function createWebServer() {
             status: body.status || DataStatus.DRAFT,
             created_by: body.created_by || 'user-1',
             updated_by: body.updated_by || 'user-1',
-            created_at: now,
+            created_at: existingIdx !== -1 ? store.records[existingIdx].created_at : now,
             updated_at: now,
             is_deleted: false
         };
-        store.records.push(newRecord);
+        if (existingIdx !== -1) {
+            store.records[existingIdx] = newRecord;
+        }
+        else {
+            store.records.push(newRecord);
+        }
         saveBackendStore(store);
         // Jika langsung dipublish, sinkronkan ke FAQ CSV
         if (newRecord.status === DataStatus.PUBLISHED) {
@@ -267,7 +295,7 @@ export function createWebServer() {
                 syncDataToFAQ(parentDs.category, newRecord.indicator, newRecord.period, newRecord.value ?? '-', newRecord.unit);
             }
         }
-        res.status(201).json({ success: true, data: newRecord });
+        res.status(existingIdx !== -1 ? 200 : 201).json({ success: true, data: newRecord });
     });
     // PUT /api/records/:id
     app.put('/api/records/:id', (req, res) => {
@@ -499,6 +527,28 @@ export function createWebServer() {
         saveBackendStore(store);
         res.json({ success: true, data: rev, message: 'Review ditolak, status dikembalikan ke Draft.' });
     });
+    // GET /api/reviews/:id
+    app.get('/api/reviews/:id', (req, res) => {
+        const store = loadBackendStore();
+        const rev = store.reviews.find(r => r.id === req.params.id);
+        if (!rev) {
+            res.status(404).json({ success: false, error: 'Permintaan review tidak ditemukan.' });
+            return;
+        }
+        res.json({ success: true, data: rev });
+    });
+    // DELETE /api/reviews/:id
+    app.delete('/api/reviews/:id', (req, res) => {
+        const store = loadBackendStore();
+        const idx = store.reviews.findIndex(r => r.id === req.params.id);
+        if (idx === -1) {
+            res.status(404).json({ success: false, error: 'Permintaan review tidak ditemukan.' });
+            return;
+        }
+        store.reviews.splice(idx, 1);
+        saveBackendStore(store);
+        res.json({ success: true, message: 'Permintaan review berhasil dihapus.' });
+    });
     // GET /api/audit-logs
     app.get('/api/audit-logs', (req, res) => {
         const store = loadBackendStore();
@@ -525,18 +575,326 @@ export function createWebServer() {
         saveBackendStore(store);
         res.status(201).json({ success: true, data: log });
     });
+    // DELETE /api/audit-logs
+    app.delete('/api/audit-logs', (req, res) => {
+        const store = loadBackendStore();
+        const { id } = req.query;
+        if (id) {
+            const idx = store.auditLogs.findIndex(l => l.id === id);
+            if (idx !== -1) {
+                store.auditLogs.splice(idx, 1);
+                saveBackendStore(store);
+                return res.json({ success: true, message: 'Log berhasil dihapus.' });
+            }
+            return res.status(404).json({ success: false, error: 'Log tidak ditemukan.' });
+        }
+        // Clear all if no ID specified
+        store.auditLogs = [];
+        saveBackendStore(store);
+        res.json({ success: true, message: 'Seluruh riwayat audit log berhasil dibersihkan.' });
+    });
     // ============================================================
-    // 4. USERS & CATEGORIES & DASHBOARD SUMMARY
+    // 4. USERS & CATEGORIES & DASHBOARD SUMMARY & STORE SYNC
     // ============================================================
     // GET /api/users
     app.get('/api/users', (req, res) => {
         const store = loadBackendStore();
         res.json({ success: true, data: store.users });
     });
+    // GET /api/users/:id
+    app.get('/api/users/:id', (req, res) => {
+        const store = loadBackendStore();
+        const user = store.users.find(u => u.id === req.params.id);
+        if (!user) {
+            res.status(404).json({ success: false, error: 'User tidak ditemukan.' });
+            return;
+        }
+        res.json({ success: true, data: user });
+    });
+    // POST /api/users
+    app.post('/api/users', (req, res) => {
+        const store = loadBackendStore();
+        const body = req.body;
+        if (!body.name || !body.email) {
+            res.status(400).json({ success: false, error: 'Nama dan email pengguna wajib diisi.' });
+            return;
+        }
+        const targetId = body.id || `user-${uid()}`;
+        const existingIdx = store.users.findIndex(u => u.id === targetId || u.email.toLowerCase() === body.email.toLowerCase());
+        const newUser = {
+            id: existingIdx !== -1 ? store.users[existingIdx].id : targetId,
+            name: body.name.trim(),
+            email: body.email.trim(),
+            role: body.role || 'DATA_ENTRY',
+            created_at: existingIdx !== -1 ? store.users[existingIdx].created_at : new Date().toISOString(),
+        };
+        if (existingIdx !== -1) {
+            store.users[existingIdx] = newUser;
+        }
+        else {
+            store.users.push(newUser);
+        }
+        saveBackendStore(store);
+        res.status(existingIdx !== -1 ? 200 : 201).json({ success: true, data: newUser });
+    });
+    // PUT /api/users/:id
+    app.put('/api/users/:id', (req, res) => {
+        const store = loadBackendStore();
+        const idx = store.users.findIndex(u => u.id === req.params.id);
+        if (idx === -1) {
+            res.status(404).json({ success: false, error: 'User tidak ditemukan.' });
+            return;
+        }
+        store.users[idx] = { ...store.users[idx], ...req.body, id: store.users[idx].id };
+        saveBackendStore(store);
+        res.json({ success: true, data: store.users[idx] });
+    });
+    // DELETE /api/users/:id
+    app.delete('/api/users/:id', (req, res) => {
+        const store = loadBackendStore();
+        const idx = store.users.findIndex(u => u.id === req.params.id);
+        if (idx === -1) {
+            res.status(404).json({ success: false, error: 'User tidak ditemukan.' });
+            return;
+        }
+        store.users.splice(idx, 1);
+        saveBackendStore(store);
+        res.json({ success: true, message: 'User berhasil dihapus.' });
+    });
     // GET /api/categories
     app.get('/api/categories', (req, res) => {
         const store = loadBackendStore();
-        res.json({ success: true, data: store.categories });
+        // Sertakan jumlah dataset aktif per kategori
+        const listWithCount = store.categories.map(c => ({
+            ...c,
+            dataset_count: store.datasets.filter(d => d.category.toLowerCase().trim() === c.name.toLowerCase().trim()).length
+        }));
+        res.json({ success: true, data: listWithCount });
+    });
+    // GET /api/categories/:id
+    app.get('/api/categories/:id', (req, res) => {
+        const store = loadBackendStore();
+        const cat = store.categories.find(c => c.id === req.params.id);
+        if (!cat) {
+            res.status(404).json({ success: false, error: 'Kategori tidak ditemukan.' });
+            return;
+        }
+        res.json({ success: true, data: cat });
+    });
+    // POST /api/categories
+    app.post('/api/categories', (req, res) => {
+        const store = loadBackendStore();
+        const body = req.body;
+        if (!body.name) {
+            res.status(400).json({ success: false, error: 'Nama kategori wajib diisi.' });
+            return;
+        }
+        const targetId = body.id || `cat-${uid()}`;
+        const existingIdx = store.categories.findIndex(c => c.id === targetId || c.name.toLowerCase() === body.name.toLowerCase());
+        const newCat = {
+            id: existingIdx !== -1 ? store.categories[existingIdx].id : targetId,
+            name: body.name.trim(),
+            code: body.code ? body.code.trim().toUpperCase() : body.name.slice(0, 4).toUpperCase(),
+            description: body.description || ''
+        };
+        if (existingIdx !== -1) {
+            store.categories[existingIdx] = newCat;
+        }
+        else {
+            store.categories.push(newCat);
+        }
+        saveBackendStore(store);
+        res.status(existingIdx !== -1 ? 200 : 201).json({ success: true, data: newCat });
+    });
+    // PUT /api/categories/:id
+    app.put('/api/categories/:id', (req, res) => {
+        const store = loadBackendStore();
+        const idx = store.categories.findIndex(c => c.id === req.params.id);
+        if (idx === -1) {
+            res.status(404).json({ success: false, error: 'Kategori tidak ditemukan.' });
+            return;
+        }
+        const oldName = store.categories[idx].name;
+        const updated = {
+            ...store.categories[idx],
+            ...req.body,
+            id: store.categories[idx].id,
+            name: req.body.name ? req.body.name.trim() : store.categories[idx].name
+        };
+        store.categories[idx] = updated;
+        // Jika nama kategori berubah, perbarui juga category pada dataset terkait
+        if (req.body.name && req.body.name.trim() !== oldName) {
+            store.datasets.forEach(d => {
+                if (d.category === oldName)
+                    d.category = req.body.name.trim();
+            });
+        }
+        saveBackendStore(store);
+        res.json({ success: true, data: updated });
+    });
+    // DELETE /api/categories/:id
+    app.delete('/api/categories/:id', (req, res) => {
+        const store = loadBackendStore();
+        const idx = store.categories.findIndex(c => c.id === req.params.id);
+        if (idx === -1) {
+            res.status(404).json({ success: false, error: 'Kategori tidak ditemukan.' });
+            return;
+        }
+        store.categories.splice(idx, 1);
+        saveBackendStore(store);
+        res.json({ success: true, message: 'Kategori berhasil dihapus.' });
+    });
+    // GET /api/sync/store (Ambil snapshot lengkap database backend)
+    app.get('/api/sync/store', (req, res) => {
+        const store = loadBackendStore();
+        res.json({
+            success: true,
+            data: {
+                datasets: store.datasets,
+                records: store.records.filter(r => !r.is_deleted),
+                categories: store.categories,
+                users: store.users,
+                reviews: store.reviews,
+                auditLogs: store.auditLogs,
+            }
+        });
+    });
+    // POST /api/sync/store (Sinkronisasi snapshot database dua arah dengan frontend)
+    app.post('/api/sync/store', (req, res) => {
+        const store = loadBackendStore();
+        const { datasets, records, categories, users, reviews, auditLogs, deleted_dataset_ids, deleted_record_ids } = req.body;
+        let modified = false;
+        // 1. Tangani Penghapusan Dataset yang diminta frontend
+        if (Array.isArray(deleted_dataset_ids) && deleted_dataset_ids.length > 0) {
+            const delDsSet = new Set(deleted_dataset_ids);
+            const prevCount = store.datasets.length;
+            store.datasets = store.datasets.filter(d => !delDsSet.has(d.id));
+            if (store.datasets.length !== prevCount)
+                modified = true;
+            // Soft-delete records milik dataset yang dihapus
+            store.records.forEach(r => {
+                if (delDsSet.has(r.dataset_id) && !r.is_deleted) {
+                    r.is_deleted = true;
+                    modified = true;
+                }
+            });
+        }
+        // 2. Tangani Penghapusan Record yang diminta frontend
+        if (Array.isArray(deleted_record_ids) && deleted_record_ids.length > 0) {
+            const delRecSet = new Set(deleted_record_ids);
+            store.records.forEach(r => {
+                if (delRecSet.has(r.id) && !r.is_deleted) {
+                    r.is_deleted = true;
+                    modified = true;
+                }
+            });
+        }
+        // Merge Categories
+        if (Array.isArray(categories)) {
+            for (const c of categories) {
+                const cNameLower = (c.name || '').toLowerCase().trim();
+                const existingCat = store.categories.find(sc => sc.id === c.id || sc.name.toLowerCase().trim() === cNameLower);
+                if (!existingCat) {
+                    store.categories.push(c);
+                    modified = true;
+                }
+            }
+        }
+        // Merge Users
+        if (Array.isArray(users)) {
+            for (const u of users) {
+                const uEmailLower = (u.email || '').toLowerCase().trim();
+                const existingUser = store.users.find(su => su.id === u.id || su.email.toLowerCase().trim() === uEmailLower);
+                if (!existingUser) {
+                    store.users.push(u);
+                    modified = true;
+                }
+            }
+        }
+        // Merge Datasets
+        if (Array.isArray(datasets)) {
+            for (const ds of datasets) {
+                if (!ds.id)
+                    continue;
+                const existingIdx = store.datasets.findIndex(sd => sd.id === ds.id || sd.code.toUpperCase() === ds.code.toUpperCase());
+                if (existingIdx === -1) {
+                    store.datasets.push(ds);
+                    modified = true;
+                }
+                else {
+                    // If frontend has newer updated_at
+                    if (ds.updated_at && (!store.datasets[existingIdx].updated_at || new Date(ds.updated_at) > new Date(store.datasets[existingIdx].updated_at))) {
+                        store.datasets[existingIdx] = { ...store.datasets[existingIdx], ...ds };
+                        modified = true;
+                    }
+                }
+            }
+        }
+        // Merge Records
+        if (Array.isArray(records)) {
+            for (const rec of records) {
+                if (!rec.id)
+                    continue;
+                const existingIdx = store.records.findIndex(sr => sr.id === rec.id);
+                if (existingIdx === -1) {
+                    store.records.push(rec);
+                    modified = true;
+                }
+                else {
+                    if (rec.updated_at && (!store.records[existingIdx].updated_at || new Date(rec.updated_at) > new Date(store.records[existingIdx].updated_at))) {
+                        store.records[existingIdx] = { ...store.records[existingIdx], ...rec };
+                        modified = true;
+                    }
+                }
+            }
+        }
+        // Merge Reviews
+        if (Array.isArray(reviews)) {
+            for (const rev of reviews) {
+                if (!rev.id)
+                    continue;
+                const revIdx = store.reviews.findIndex(sr => sr.id === rev.id);
+                if (revIdx === -1) {
+                    store.reviews.push(rev);
+                    modified = true;
+                }
+                else if (rev.status !== store.reviews[revIdx].status) {
+                    store.reviews[revIdx] = { ...store.reviews[revIdx], ...rev };
+                    modified = true;
+                }
+            }
+        }
+        // Merge AuditLogs
+        if (Array.isArray(auditLogs)) {
+            for (const log of auditLogs) {
+                if (!log.id)
+                    continue;
+                if (!store.auditLogs.some(sl => sl.id === log.id)) {
+                    store.auditLogs.push(log);
+                    modified = true;
+                }
+            }
+        }
+        // Update dataset record_count counts
+        store.datasets.forEach(d => {
+            d.record_count = store.records.filter(r => r.dataset_id === d.id && !r.is_deleted).length;
+        });
+        if (modified) {
+            saveBackendStore(store);
+        }
+        syncAllPublishedToFAQ();
+        res.json({
+            success: true,
+            message: 'Database backend berhasil disinkronkan.',
+            data: {
+                datasets: store.datasets,
+                records: store.records.filter(r => !r.is_deleted),
+                categories: store.categories,
+                users: store.users,
+                reviews: store.reviews,
+                auditLogs: store.auditLogs,
+            }
+        });
     });
     // GET /api/dashboard/summary
     app.get('/api/dashboard/summary', (req, res) => {
@@ -627,6 +985,8 @@ export function createWebServer() {
     // 6. CSV FAQ REST API (Original Compatible)
     // ============================================================
     app.get('/api/faqs', (req, res) => {
+        // Sinkronkan seluruh dataset berstatus PUBLISHED ke data FAQ WhatsApp
+        syncAllPublishedToFAQ();
         const data = loadFAQData();
         const list = Object.entries(data).map(([pertanyaan, jawaban]) => ({
             pertanyaan,
@@ -679,10 +1039,21 @@ export function createWebServer() {
         }
     });
     // ============================================================
-    // 7. WEB ADMIN UNIFIED REDIRECT / ENTRY
+    // 7. WEB ADMIN UNIFIED ENTRY & DASHBOARD
     // ============================================================
-    // Redirect / dan /admin ke frontend (default localhost:3000 atau FRONTEND_URL)
-    app.get(['/', '/admin'], (req, res) => {
+    // Sajikan Panel Web Admin Terpadu pada /admin dan /panel
+    app.get(['/admin', '/panel', '/admin/panel'], (req, res) => {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(renderAdminHTML());
+    });
+    // Root endpoint: Jika meminta format HTML, sajikan panel admin backend; jika ada flag ?redirect=frontend, arahkan ke Next.js
+    app.get('/', (req, res) => {
+        const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
+        if (acceptsHtml && req.query.redirect !== 'frontend') {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.send(renderAdminHTML());
+            return;
+        }
         const target = process.env.FRONTEND_URL?.split(',')[0]?.trim() || 'http://localhost:3000';
         res.redirect(target);
     });

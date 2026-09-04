@@ -12,7 +12,12 @@ export function getDynamicMenuItems() {
     let publishedDatasets = [];
     try {
         const store = loadBackendStore();
-        publishedDatasets = store.datasets.filter((d) => d.status === DataStatus.PUBLISHED);
+        publishedDatasets = store.datasets.filter((d) => {
+            if (d.status !== DataStatus.PUBLISHED)
+                return false;
+            const recCount = store.records.filter((r) => r.dataset_id === d.id && r.status === DataStatus.PUBLISHED && !r.is_deleted && r.value !== null).length;
+            return recCount > 0;
+        });
     }
     catch (e) {
         console.warn('[WARN] Gagal memuat backend store untuk menu dinamis:', e);
@@ -74,6 +79,12 @@ export function getDynamicMenuItems() {
     return items;
 }
 export function generateDynamicMenu(faqData) {
+    if (faqData) {
+        const custom = faqData['Menu Utama'] || faqData['menu utama'] || faqData['MENU UTAMA'];
+        if (custom && custom.trim()) {
+            return custom.replace(/<br\s*\/?>/gi, '\n');
+        }
+    }
     const menuItems = getDynamicMenuItems();
     const lines = menuItems.map((item) => {
         return `${item.number}. *${item.label}*`;

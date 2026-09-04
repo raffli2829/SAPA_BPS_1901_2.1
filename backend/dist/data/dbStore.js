@@ -320,15 +320,54 @@ export function syncDataToFAQ(datasetName, indicator, year, value, unit) {
     try {
         const currentFaq = loadFAQData();
         const cleanKey = datasetName.trim();
+        const valStr = typeof value === 'number' ? value.toLocaleString('id-ID') : value;
         if (currentFaq[cleanKey]) {
-            const addition = `<br>• *${year} (${indicator}):* *${value} ${unit}*`;
+            const addition = `<br>• *${year} (${indicator}):* *${valStr} ${unit}*`;
             if (!currentFaq[cleanKey].includes(`${year}`)) {
                 currentFaq[cleanKey] = currentFaq[cleanKey] + addition;
                 saveFAQData(currentFaq);
             }
         }
+        else {
+            currentFaq[cleanKey] = `📊 *DATA STATISTIK: ${cleanKey.toUpperCase()}*<br>━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br>• *Tahun ${year} (${indicator}):* *${valStr} ${unit}*<br><br>🏢 *Sumber Data:* BPS Kabupaten Bangka<br>💡 _Data ini disinkronkan secara otomatis dari sistem SAPA BPS 1901._`;
+            saveFAQData(currentFaq);
+        }
     }
     catch (e) {
         console.warn('[WARN] Gagal sinkronisasi data ke FAQ CSV:', e);
+    }
+}
+/**
+ * Meregenerasi seluruh dataset berstatus PUBLISHED dan rekaman datanya ke dalam FAQ CSV WhatsApp.
+ */
+export function syncAllPublishedToFAQ() {
+    try {
+        const store = loadBackendStore();
+        const currentFaq = loadFAQData();
+        const publishedDs = store.datasets.filter(d => d.status === DataStatus.PUBLISHED);
+        for (const ds of publishedDs) {
+            const recs = store.records
+                .filter(r => r.dataset_id === ds.id && r.status === DataStatus.PUBLISHED && !r.is_deleted && r.value !== null)
+                .sort((a, b) => b.period.localeCompare(a.period));
+            if (recs.length === 0)
+                continue;
+            const lines = recs.map(r => {
+                const valStr = typeof r.value === 'number' ? r.value.toLocaleString('id-ID') : r.value;
+                const noteStr = r.notes ? ` _(${r.notes})_` : '';
+                return `• *Tahun ${r.period} (${r.indicator}):* *${valStr} ${r.unit || ds.unit}*${noteStr}`;
+            });
+            const keyName = ds.name.trim();
+            const keyCategory = ds.category.trim();
+            const faqBody = `📊 *DATA RESMI: ${ds.name.toUpperCase()}*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${lines.join('\n')}\n\n📁 *Kategori:* ${ds.category}\n🏢 *Sumber Data:* ${ds.source || 'BPS Kabupaten Bangka'}\n💡 _Data resmi ini terupdate secara real-time dari Katalog SAPA BPS 1901._`;
+            currentFaq[keyName] = faqBody.replace(/\n/g, '<br>');
+            if (keyCategory && keyCategory !== keyName) {
+                currentFaq[keyCategory] = faqBody.replace(/\n/g, '<br>');
+            }
+        }
+        return saveFAQData(currentFaq);
+    }
+    catch (e) {
+        console.error('[ERROR syncAllPublishedToFAQ]', e);
+        return false;
     }
 }

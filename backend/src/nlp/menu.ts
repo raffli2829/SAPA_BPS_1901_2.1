@@ -93,6 +93,13 @@ export function getDynamicMenuItems(): DynamicMenuItem[] {
 }
 
 export function generateDynamicMenu(faqData?: Record<string, string>): string {
+  if (faqData) {
+    const custom = faqData['Menu Utama'] || faqData['menu utama'] || faqData['MENU UTAMA'];
+    if (custom && custom.trim()) {
+      return custom.replace(/<br\s*\/?>/gi, '\n');
+    }
+  }
+
   const menuItems = getDynamicMenuItems();
 
   const lines = menuItems.map((item) => {
