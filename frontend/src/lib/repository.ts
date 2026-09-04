@@ -140,6 +140,8 @@ function updateBackendStatus(partial: Partial<BackendConnectionState>) {
 }
 
 let isSyncing = false;
+const pendingDeletedDatasets = new Set<string>();
+const pendingDeletedRecords = new Set<string>();
 
 /**
  * Sinkronisasi data real-time dua arah dengan backend Express / db_store.json
@@ -153,7 +155,7 @@ export async function syncWithBackend(): Promise<void> {
     const currentStore = getStore();
 
     // 1. Prioritaskan Full Snapshot Sync dua arah:
-    // Kirim data lokal saat ini (termasuk input terbaru) ke backend, dan terima database gabungan yang utuh.
+    // Kirim data lokal saat ini (termasuk input terbaru dan id yang dihapus) ke backend, dan terima database gabungan yang utuh.
     const syncRes = await BackendApi.syncStore({
       datasets: currentStore.datasets,
       records: currentStore.records,
@@ -161,9 +163,14 @@ export async function syncWithBackend(): Promise<void> {
       users: currentStore.users,
       reviews: currentStore.reviews,
       auditLogs: currentStore.auditLogs,
+      deleted_dataset_ids: Array.from(pendingDeletedDatasets),
+      deleted_record_ids: Array.from(pendingDeletedRecords),
     });
 
     if (syncRes && Array.isArray(syncRes.datasets)) {
+      pendingDeletedDatasets.clear();
+      pendingDeletedRecords.clear();
+
       currentStore.datasets = syncRes.datasets;
       if (Array.isArray(syncRes.records)) currentStore.records = syncRes.records;
       if (Array.isArray(syncRes.categories)) currentStore.categories = syncRes.categories;
@@ -287,7 +294,30 @@ export const CategoryRepo = {
     getStore().categories.push(category);
     BackendApi.createCategory(category).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return category;
+  },
+
+  update(id: string, updates: Partial<Category>): Category | undefined {
+    const s = getStore();
+    const idx = s.categories.findIndex((c) => c.id === id);
+    if (idx === -1) return undefined;
+    s.categories[idx] = { ...s.categories[idx], ...updates };
+    BackendApi.updateCategory(id, updates).catch(() => {});
+    notify();
+    syncWithBackend().catch(() => {});
+    return s.categories[idx];
+  },
+
+  delete(id: string): boolean {
+    const s = getStore();
+    const idx = s.categories.findIndex((c) => c.id === id);
+    if (idx === -1) return false;
+    s.categories.splice(idx, 1);
+    BackendApi.deleteCategory(id).catch(() => {});
+    notify();
+    syncWithBackend().catch(() => {});
+    return true;
   },
 };
 
@@ -395,6 +425,7 @@ export const DatasetRepo = {
 
     BackendApi.createDataset(dataset).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return dataset;
   },
 
@@ -442,6 +473,7 @@ export const DatasetRepo = {
 
     BackendApi.updateDataset(id, updates).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return s.datasets[index];
   },
 
@@ -509,6 +541,7 @@ export const DatasetRepo = {
     if (index === -1) return false;
 
     const dataset = s.datasets[index];
+    pendingDeletedDatasets.add(id);
 
     // Hapus total dataset dari daftar agar tidak muncul di katalog jika salah buat
     s.datasets.splice(index, 1);
@@ -529,6 +562,7 @@ export const DatasetRepo = {
 
     BackendApi.deleteDataset(id).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return true;
   },
 };
@@ -596,6 +630,7 @@ export const RecordRepo = {
 
     BackendApi.createRecord(record).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return record;
   },
 
@@ -646,6 +681,7 @@ export const RecordRepo = {
     }
 
     notify();
+    syncWithBackend().catch(() => {});
     return created;
   },
 
@@ -695,6 +731,7 @@ export const RecordRepo = {
 
     BackendApi.updateRecord(id, updates).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return s.records[index];
   },
 
@@ -702,6 +739,7 @@ export const RecordRepo = {
     const record = getStore().records.find((r) => r.id === id);
     if (!record) return false;
 
+    pendingDeletedRecords.add(id);
     record.is_deleted = true;
     record.updated_by = userId;
     record.updated_at = new Date().toISOString();
@@ -718,6 +756,7 @@ export const RecordRepo = {
 
     BackendApi.deleteRecord(id).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return true;
   },
 

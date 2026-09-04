@@ -1,15 +1,23 @@
-﻿import fs from 'fs';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ADMIN_HTML_PATH = path.resolve(__dirname, 'admin.html');
+const CANDIDATE_PATHS = [
+  path.resolve(__dirname, 'admin.html'),
+  path.resolve(__dirname, '../src/web/admin.html'),
+  path.resolve(__dirname, '../../src/web/admin.html'),
+  path.resolve(process.cwd(), 'src/web/admin.html'),
+  path.resolve(process.cwd(), 'backend/src/web/admin.html'),
+];
 
 export function renderAdminHTML(): string {
   try {
-    if (fs.existsSync(ADMIN_HTML_PATH)) {
-      return fs.readFileSync(ADMIN_HTML_PATH, 'utf-8');
+    for (const p of CANDIDATE_PATHS) {
+      if (fs.existsSync(p)) {
+        return fs.readFileSync(p, 'utf-8');
+      }
     }
   } catch (err) {
     console.error('[ERROR READ ADMIN HTML]', err);

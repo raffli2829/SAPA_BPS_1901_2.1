@@ -1,6 +1,24 @@
 {
   "datasets": [
     {
+      "id": "1788506148149-oczhi4r",
+      "code": "INFL-001",
+      "name": "inflasi di bangka",
+      "category": "Pertumbuhan Ekonomi",
+      "description": "deksripsi dataset",
+      "definition": "Definisi Operasional / Konsep",
+      "geographic_scope": "Kabupaten Bangka",
+      "unit": "Persen (%)",
+      "source": "BPS Kabupaten Bangka",
+      "period_type": "YEARLY",
+      "status": "PUBLISHED",
+      "created_by": "user-2",
+      "updated_by": "user-2",
+      "created_at": "2026-09-04T07:15:48.270Z",
+      "updated_at": "2026-09-04T07:16:00.145Z",
+      "record_count": 0
+    },
+    {
       "id": "1788419349379-uhpbiiy",
       "code": "JUML-001",
       "name": "Jumlah Umat",
@@ -34,7 +52,7 @@
       "updated_by": "user-2",
       "created_at": "2025-01-01T08:00:00Z",
       "updated_at": "2026-09-04T04:25:01.347Z",
-      "record_count": 5
+      "record_count": 11
     },
     {
       "id": "ds-2",
@@ -963,6 +981,57 @@
       "created_at": "2026-09-04T04:25:01.347Z",
       "updated_at": "2026-09-04T04:25:01.347Z",
       "is_deleted": false
+    },
+    {
+      "id": "rec-94uozy0mtmmp2pr",
+      "dataset_id": "ds-1",
+      "indicator": "Test Ind",
+      "region": "Kabupaten Bangka",
+      "period": "2026",
+      "value": 100,
+      "unit": "",
+      "notes": "",
+      "source": "BPS Kabupaten Bangka",
+      "status": "DRAFT",
+      "created_by": "user-1",
+      "updated_by": "user-1",
+      "created_at": "2026-09-04T07:24:35.199Z",
+      "updated_at": "2026-09-04T07:24:35.199Z",
+      "is_deleted": false
+    },
+    {
+      "id": "rec-u39c0lxmtmmrbao",
+      "dataset_id": "ds-1",
+      "indicator": "Test Ind",
+      "region": "Kabupaten Bangka",
+      "period": "2025",
+      "value": 999,
+      "unit": "Jiwa",
+      "notes": "",
+      "source": "BPS Kabupaten Bangka",
+      "status": "DRAFT",
+      "created_by": "user-1",
+      "updated_by": "user-1",
+      "created_at": "2026-09-04T07:26:19.632Z",
+      "updated_at": "2026-09-04T07:26:19.632Z",
+      "is_deleted": false
+    },
+    {
+      "id": "rec-rpwme6ymtmn02u5",
+      "dataset_id": "ds-rs89e24mtmn02tv",
+      "indicator": "Indikator Uji Coba",
+      "region": "Kabupaten Bangka",
+      "period": "2026",
+      "value": 9876.54,
+      "unit": "Unit",
+      "notes": "Catatan setelah diubah",
+      "source": "BPS Kabupaten Bangka",
+      "status": "PUBLISHED",
+      "created_by": "user-1",
+      "updated_by": "user-1",
+      "created_at": "2026-09-04T07:33:08.573Z",
+      "updated_at": "2026-09-04T07:33:08.586Z",
+      "is_deleted": true
     }
   ],
   "users": [
@@ -1007,6 +1076,85 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "log-mp6s916mtmn02tv",
+      "entity_type": "dataset",
+      "entity_id": "ds-rs89e24mtmn02tv",
+      "entity_name": "Dataset Uji Coba CRUD",
+      "action": "CREATE",
+      "changes": [
+        {
+          "field": "status",
+          "old_value": null,
+          "new_value": "PUBLISHED"
+        }
+      ],
+      "user_id": "user-1",
+      "user_name": "Ahmad Fauzi",
+      "created_at": "2026-09-04T07:33:08.563Z"
+    },
+    {
+      "id": "log-hbwrm3kmtmme1ap",
+      "entity_type": "dataset",
+      "entity_id": "1788506148149-oczhi4r",
+      "entity_name": "inflasi di bangka",
+      "action": "UPDATE",
+      "changes": [
+        {
+          "field": "updated",
+          "old_value": "2026-09-04T07:15:48.270Z",
+          "new_value": "2026-09-04T07:16:00.145Z"
+        }
+      ],
+      "user_id": "user-1",
+      "user_name": "Petugas",
+      "created_at": "2026-09-04T07:16:00.145Z"
+    },
+    {
+      "id": "1788506160024-hxj41pp",
+      "entity_type": "dataset",
+      "entity_id": "1788506148149-oczhi4r",
+      "entity_name": "inflasi di bangka",
+      "action": "STATUS_CHANGE",
+      "changes": [
+        {
+          "field": "status",
+          "old_value": "DRAFT",
+          "new_value": "PUBLISHED"
+        }
+      ],
+      "user_id": "user-2",
+      "user_name": "Siti Nurhaliza",
+      "created_at": "2026-09-04T07:16:00.143Z"
+    },
+    {
+      "id": "log-qn1fjk2mtmmds4u",
+      "entity_type": "dataset",
+      "entity_id": "1788506148149-oczhi4r",
+      "entity_name": "inflasi di bangka",
+      "action": "CREATE",
+      "changes": [
+        {
+          "field": "status",
+          "old_value": null,
+          "new_value": "DRAFT"
+        }
+      ],
+      "user_id": "user-2",
+      "user_name": "Siti Nurhaliza",
+      "created_at": "2026-09-04T07:15:48.270Z"
+    },
+    {
+      "id": "1788506148149-4vena54",
+      "entity_type": "dataset",
+      "entity_id": "1788506148149-oczhi4r",
+      "entity_name": "inflasi di bangka",
+      "action": "CREATE",
+      "changes": [],
+      "user_id": "user-2",
+      "user_name": "Siti Nurhaliza",
+      "created_at": "2026-09-04T07:15:48.269Z"
+    },
     {
       "id": "log-dul391xmtl8spt1",
       "entity_type": "dataset",
