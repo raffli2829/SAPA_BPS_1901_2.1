@@ -23,7 +23,11 @@ export function getDynamicMenuItems(): DynamicMenuItem[] {
   let publishedDatasets: { id: string; name: string; category: string }[] = [];
   try {
     const store = loadBackendStore();
-    publishedDatasets = store.datasets.filter((d) => d.status === DataStatus.PUBLISHED);
+    publishedDatasets = store.datasets.filter((d) => {
+      if (d.status !== DataStatus.PUBLISHED) return false;
+      const recCount = store.records.filter((r) => r.dataset_id === d.id && r.status === DataStatus.PUBLISHED && !r.is_deleted && r.value !== null).length;
+      return recCount > 0;
+    });
   } catch (e) {
     console.warn('[WARN] Gagal memuat backend store untuk menu dinamis:', e);
   }

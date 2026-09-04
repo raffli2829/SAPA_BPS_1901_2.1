@@ -213,10 +213,17 @@ export async function syncWithBackend(): Promise<void> {
       hasChanges = true;
     }
 
+    const isLive = Boolean(syncRes || datasets || records || categories || users);
+
     if (hasChanges) {
       notify();
     }
-    updateBackendStatus({ isConnected: true, isSyncing: false, lastSyncedAt: new Date() });
+
+    if (isLive) {
+      updateBackendStatus({ isConnected: true, isSyncing: false, lastSyncedAt: new Date() });
+    } else {
+      updateBackendStatus({ isConnected: false, isSyncing: false });
+    }
   } catch (err) {
     console.warn('[Backend Sync] Menggunakan data lokal (backend offline):', err);
     updateBackendStatus({ isConnected: false, isSyncing: false });
@@ -1293,44 +1300,81 @@ export const ChatbotTemplateRepo = {
           )
           .sort((a, b) => b.period.localeCompare(a.period));
 
-      let dataSummary = '';
-      if (records.length > 0) {
-        const latest = records.slice(0, 5);
-        dataSummary = latest
-          .map(
+        let dataSummary = '';
+        if (records.length > 0) {
+          const latest = records[0];
+          const latestVal = typeof latest.value === 'number' ? latest.value.toLocaleString('id-ID') : latest.value;
+          const historyLines = records.slice(0, 5).map(
             (r) =>
-              `• Periode *${r.period}* (${r.region}): *${r.value?.toLocaleString('id-ID')}* ${r.unit || ds.unit}`
-          )
-          .join('\n');
-      } else {
-        dataSummary = '• _Data sedang dalam pemutakhiran berkala._';
+              `• Tahun *${r.period}* (${r.region}): *${typeof r.value === 'number' ? r.value.toLocaleString('id-ID') : r.value}* ${r.unit || ds.unit}${r.notes ? ` _(${r.notes})_` : ''}`
+          ).join('\n');
+
+          dataSummary =
+            `⭐ *REALISASI TERBARU (Tahun ${latest.period}):*\n` +
+            `👉 *${latestVal} ${latest.unit || ds.unit}*` +
+            (latest.notes ? `\n_Catatan: ${latest.notes}_` : '') +
+            `\n\n📈 *Rincian Perkembangan Historis (Terkini ke Terdahulu):*\n${historyLines}`;
+        } else {
+          dataSummary = '• _Data sedang dalam pemutakhiran berkala._';
+        }
+
+        const response =
+          `📊 *DATA RESMI: ${ds.name.toUpperCase()}*\n` +
+          `🏛️ *BPS Kabupaten Bangka* (Kode: ${ds.code})\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+          `📍 *Cakupan:* ${ds.geographic_scope}\n` +
+          `${dataSummary}\n\n` +
+          (ds.definition ? `ℹ️ *Konsep/Definisi:* ${ds.definition.slice(0, 120)}...\n\n` : '') +
+          `📌 *Sumber Data:* ${ds.source || 'BPS Kabupaten Bangka'}\n` +
+          `💡 _Data diambil otomatis langsung dari Katalog Dataset SAPA BPS._`;
+
+        return {
+          id: `tpl-dataset-${ds.id}`,
+          keyword: ds.name,
+          response,
+          category: ds.category || 'Data Statistik BPS',
+          source_type: 'DATASET',
+          dataset_id: ds.id,
+          dataset_code: ds.code,
+          is_active: true,
+          updated_at: ds.updated_at,
+        };
+      });
+
+    // Filter template manual lama agar tidak menimpa/menduplikasi data resmi dari dataset
+    const datasetKeywords = new Set(
+      datasetTemplates.flatMap((t) => [
+        t.keyword.toLowerCase(),
+        (t.category || '').toLowerCase(),
+      ])
+    );
+    const filteredManual = manualList.filter((m) => {
+      const kw = m.keyword.toLowerCase();
+      // Selalu izinkan template layanan, kontak, dan FAQ umum
+      if (
+        kw.includes('layanan') ||
+        kw.includes('petugas') ||
+        kw.includes('pst') ||
+        kw.includes('kontak') ||
+        kw.includes('bantuan') ||
+        kw.includes('alamat') ||
+        kw.includes('jam')
+      ) {
+        return true;
       }
-
-      const response =
-        `📊 *DATA RESMI: ${ds.name.toUpperCase()}*\n` +
-        `🏛️ *BPS Kabupaten Bangka* (Kode: ${ds.code})\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `📍 *Cakupan:* ${ds.geographic_scope}\n` +
-        `📈 *Rincian Indikator Terbaru:*\n${dataSummary}\n\n` +
-        (ds.definition ? `ℹ️ *Konsep/Definisi:* ${ds.definition.slice(0, 120)}...\n\n` : '') +
-        `📌 *Sumber Data:* ${ds.source || 'BPS Kabupaten Bangka'}\n` +
-        `💡 _Data diambil otomatis langsung dari Katalog Dataset SAPA BPS._`;
-
-      return {
-        id: `tpl-dataset-${ds.id}`,
-        keyword: ds.name,
-        response,
-        category: ds.category || 'Data Statistik BPS',
-        source_type: 'DATASET',
-        dataset_id: ds.id,
-        dataset_code: ds.code,
-        is_active: true,
-        updated_at: ds.updated_at,
-      };
+      // Jangan tampilkan template lama jika sudah ada dataset resmi terbitan untuk topik ini
+      return !Array.from(datasetKeywords).some((dk) => dk && (kw.includes(dk) || dk.includes(kw)));
     });
 
-    // Template Dinamis Menu Utama (Menyusun semua dataset terbitan + 2 opsi layanan selalu di nomor terbawah)
-    const publishedDs = DatasetRepo.getAll().filter((d) => d.status === DataStatus.PUBLISHED);
+    // Template Dinamis Menu Utama (Hanya masukkan dataset yang memiliki record terbitan riil)
+    const publishedDs = DatasetRepo.getAll().filter((d) => {
+      if (d.status !== DataStatus.PUBLISHED) return false;
+      const recCount = getStore().records.filter(
+        (r) => r.dataset_id === d.id && !r.is_deleted && r.value !== null && r.status === DataStatus.PUBLISHED
+      ).length;
+      return recCount > 0;
+    });
+
     const seenCategories = new Set<string>();
     const mLines: string[] = [];
     let mNum = 1;
@@ -1364,7 +1408,7 @@ export const ChatbotTemplateRepo = {
       updated_at: new Date().toISOString(),
     };
 
-    return [dynamicMenuTemplate, ...datasetTemplates, ...manualList];
+    return [dynamicMenuTemplate, ...datasetTemplates, ...filteredManual];
   },
 
   getById(id: string): ChatbotTemplate | undefined {

@@ -31,9 +31,9 @@
       "period_type": "YEARLY",
       "status": "PUBLISHED",
       "created_by": "user-1",
-      "updated_by": "user-1",
+      "updated_by": "user-2",
       "created_at": "2025-01-01T08:00:00Z",
-      "updated_at": "2025-10-01T08:00:00Z",
+      "updated_at": "2026-09-04T04:25:01.347Z",
       "record_count": 5
     },
     {
@@ -895,6 +895,74 @@
       "created_at": "2025-04-01T00:00:00Z",
       "updated_at": "2025-04-01T00:00:00Z",
       "is_deleted": false
+    },
+    {
+      "id": "1788495901347-eke7xvr",
+      "dataset_id": "ds-1",
+      "indicator": "Jumlah Penduduk",
+      "region": "Kabupaten Bangka",
+      "period": "2021",
+      "value": 324200,
+      "unit": "Jiwa",
+      "notes": "Data proyeksi SP2020",
+      "source": "BPS Kabupaten Bangka",
+      "status": "DRAFT",
+      "created_by": "user-2",
+      "updated_by": "user-2",
+      "created_at": "2026-09-04T04:25:01.347Z",
+      "updated_at": "2026-09-04T04:25:01.347Z",
+      "is_deleted": false
+    },
+    {
+      "id": "1788495901347-pujk9xl",
+      "dataset_id": "ds-1",
+      "indicator": "Jumlah Penduduk",
+      "region": "Kabupaten Bangka",
+      "period": "2022",
+      "value": 327100,
+      "unit": "Jiwa",
+      "notes": "Data proyeksi SP2020",
+      "source": "BPS Kabupaten Bangka",
+      "status": "DRAFT",
+      "created_by": "user-2",
+      "updated_by": "user-2",
+      "created_at": "2026-09-04T04:25:01.347Z",
+      "updated_at": "2026-09-04T04:25:01.347Z",
+      "is_deleted": false
+    },
+    {
+      "id": "1788495901347-ehx9s7b",
+      "dataset_id": "ds-1",
+      "indicator": "Jumlah Penduduk",
+      "region": "Kabupaten Bangka",
+      "period": "2023",
+      "value": 330050,
+      "unit": "Jiwa",
+      "notes": "Data proyeksi SP2020",
+      "source": "BPS Kabupaten Bangka",
+      "status": "DRAFT",
+      "created_by": "user-2",
+      "updated_by": "user-2",
+      "created_at": "2026-09-04T04:25:01.347Z",
+      "updated_at": "2026-09-04T04:25:01.347Z",
+      "is_deleted": false
+    },
+    {
+      "id": "1788495901347-20jutbo",
+      "dataset_id": "ds-1",
+      "indicator": "Jumlah Penduduk",
+      "region": "Kabupaten Bangka",
+      "period": "2024",
+      "value": 333400,
+      "unit": "Jiwa",
+      "notes": "Data proyeksi SP2020",
+      "source": "BPS Kabupaten Bangka",
+      "status": "DRAFT",
+      "created_by": "user-2",
+      "updated_by": "user-2",
+      "created_at": "2026-09-04T04:25:01.347Z",
+      "updated_at": "2026-09-04T04:25:01.347Z",
+      "is_deleted": false
     }
   ],
   "users": [
@@ -1141,6 +1209,38 @@
       "user_name": "Siti Nurhaliza",
       "reason": "Data proyeksi penduduk resmi telah diverifikasi.",
       "created_at": "2025-10-01T10:30:00Z"
+    },
+    {
+      "id": "1788495901348-jo29qsq",
+      "entity_type": "record",
+      "entity_id": "ds-1",
+      "entity_name": "4 data records",
+      "action": "CREATE",
+      "changes": [
+        {
+          "field": "Jumlah Penduduk 2021",
+          "old_value": null,
+          "new_value": 324200
+        },
+        {
+          "field": "Jumlah Penduduk 2022",
+          "old_value": null,
+          "new_value": 327100
+        },
+        {
+          "field": "Jumlah Penduduk 2023",
+          "old_value": null,
+          "new_value": 330050
+        },
+        {
+          "field": "Jumlah Penduduk 2024",
+          "old_value": null,
+          "new_value": 333400
+        }
+      ],
+      "user_id": "user-2",
+      "user_name": "Siti Nurhaliza",
+      "created_at": "2026-09-04T04:25:01.348Z"
     }
   ],
   "categories": [
